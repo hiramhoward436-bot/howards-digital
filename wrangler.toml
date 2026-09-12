@@ -1,0 +1,20 @@
+name = "howards-digital"
+main = "src/index.js"
+compatibility_date = "2026-09-12"
+
+[vars]
+APP_NAME = "Howard's Digital"
+APP_VERSION = "0.1.0"
+
+[[d1_databases]]
+binding = "HD_DB"
+database_name = "howards-digital"
+database_id = "REPLACE_AFTER_CREATE"
+migrations_dir = "migrations"
+
+[[r2_buckets]]
+binding = "HD_FILES"
+bucket_name = "howards-digital-files"
+
+[assets]
+directory = "./public"
