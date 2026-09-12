@@ -1,0 +1,15 @@
+node_modules/
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+.DS_Store
+*.log
+coverage/
+dist/
+
+# Local secrets / credentials
+*.pem
+*.key
+secrets/
