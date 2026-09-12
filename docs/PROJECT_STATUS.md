@@ -14,10 +14,11 @@
 - Initial `/api/projects` endpoint
 - First HD dashboard UI
 - Responsive dashboard styling and project loading behavior
+- First build notes recorded
 
 ## Current build milestone
 
-**v0.1 application scaffold is now ready to promote to the main branch.**
+**v0.1 application scaffold is ready to promote to the main branch.**
 
 ## Next build milestones
 
