@@ -9,7 +9,7 @@ APP_VERSION = "0.1.0"
 [[d1_databases]]
 binding = "HD_DB"
 database_name = "howards-digital"
-database_id = "REPLACE_AFTER_CREATE"
+database_id = "92430af1-7594-4fc5-8e7a-13d861777460"
 migrations_dir = "migrations"
 
 [[r2_buckets]]
