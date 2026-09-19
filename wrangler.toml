@@ -4,17 +4,14 @@ compatibility_date = "2026-09-12"
 
 [vars]
 APP_NAME = "Howard's Digital"
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.2.0"
+STORAGE_PROVIDER = "Gozunga"
 
 [[d1_databases]]
 binding = "HD_DB"
 database_name = "howards-digital"
 database_id = "92430af1-7594-4fc5-8e7a-13d861777460"
 migrations_dir = "migrations"
-
-[[r2_buckets]]
-binding = "HD_FILES"
-bucket_name = "howards-digital-files"
 
 [assets]
 directory = "./public"
