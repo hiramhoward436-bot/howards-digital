@@ -26,14 +26,32 @@
       </article>
       <article class="card">
         <span class="label">Storage</span>
-        <h2>R2</h2>
-        <p>Large files will live in object storage, separate from the database.</p>
+        <h2>Gozunga</h2>
+        <p>S3-compatible object storage for project files.</p>
       </article>
       <article class="card">
         <span class="label">Database</span>
         <h2>D1</h2>
         <p>Projects, folders, file metadata, and shares.</p>
       </article>
+    </section>
+
+    <section class="card upload-card">
+      <div class="section-head">
+        <div>
+          <span class="label">Files</span>
+          <h2>Upload files</h2>
+        </div>
+      </div>
+      <form id="upload-form" class="upload-form">
+        <label class="dropzone" for="file-input">
+          <input id="file-input" name="file" type="file" required>
+          <strong>Choose a file</strong>
+          <span>Files go into Project HD.</span>
+        </label>
+        <button type="submit" id="upload-button">Upload</button>
+      </form>
+      <div id="upload-status" class="upload-status"></div>
     </section>
 
     <section class="card projects">
@@ -46,6 +64,18 @@
       </div>
       <div id="projects" class="project-list">
         <div class="empty">Loading projects…</div>
+      </div>
+    </section>
+
+    <section class="card files-card">
+      <div class="section-head">
+        <div>
+          <span class="label">Project HD</span>
+          <h2>Files</h2>
+        </div>
+      </div>
+      <div id="files" class="project-list">
+        <div class="empty">Loading files…</div>
       </div>
     </section>
   </main>
