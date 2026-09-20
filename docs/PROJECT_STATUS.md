@@ -1,37 +1,41 @@
 # Howard's Digital — Project Status
 
-**Version:** v0.1 foundation
-**Status:** Active build — application scaffold committed
+**Version:** v0.2.0  
+**Status:** Active build — Gozunga storage integration in progress
 
 ## Completed
 
-- Repository created
-- Initial README and secure `.gitignore`
-- Cloudflare Worker architecture documented
-- D1 schema with projects, folders, files, and shares
-- Cloudflare Worker configuration scaffold
-- Initial `/api/health` endpoint
-- Initial `/api/projects` endpoint
-- First HD dashboard UI
-- Responsive dashboard styling and project loading behavior
-- First build notes recorded
+- Repository and project foundation
+- D1 schema for projects, folders, files, and shares
+- Howard's Digital dashboard
+- Project listing and file listing UI
+- Upload UI and download flow
+- Gozunga selected as the object-storage provider
+- Gozunga S3-compatible integration added to the Worker
+- Gozunga AWS4 endpoint/region configuration aligned with Gozunga's current AWS-SDK example
 
 ## Current build milestone
 
-**v0.1 application scaffold is ready to promote to the main branch.**
+**v0.2 storage integration is code-complete for the application layer, but live credentials and deployment still need verification.**
+
+The application expects these Worker secrets/configuration values:
+
+- GOZUNGA_ACCESS_KEY
+- GOZUNGA_SECRET_KEY
+- GOZUNGA_BUCKET
+
+The endpoint defaults to Gozunga's AWS-SDK S3 endpoint and the region defaults to SiouxFalls.
 
 ## Next build milestones
 
-1. Create real Cloudflare D1 database
-2. Create real Cloudflare R2 bucket
-3. Add authenticated project/folder/file operations
-4. Add direct-to-R2 upload flow
-5. Add download/share flow
-6. Deploy Worker
-7. Test the live dashboard
-8. Connect `hd.howardsdigital.com`
-9. Add AI access layer
+1. Obtain/verify the Gozunga S3 credentials and bucket
+2. Store the credentials as deployment secrets — never in GitHub
+3. Verify the D1 binding
+4. Deploy the Worker
+5. Test a real upload and download
+6. Replace the old test site with the verified build
+7. Add folders, sharing, and the larger project workspace
 
 ## Important constraint
 
-Actual Cloudflare resources and DNS are not created yet. Do not claim deployment until the Worker, D1 database, R2 bucket, and DNS route have been verified.
+Do not claim Howard's Digital is live or storage-connected until the Worker, D1 binding, Gozunga credentials, bucket, upload, and download have all been verified.
