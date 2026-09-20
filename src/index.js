@@ -16,10 +16,12 @@ const text = (value) => String(value || "").replace(/[^a-zA-Z0-9._ -]/g, "_").tr
 
 function storageConfig(env) {
   return {
-    endpoint: env.GOZUNGA_ENDPOINT || "https://files.fsd1.gozunga.com",
+    // Gozunga's AWS-SDK example uses the S3 service endpoint on port 6780.
+    endpoint: env.GOZUNGA_ENDPOINT || "https://cloud.fsd1.gozunga.com:6780",
     bucket: env.GOZUNGA_BUCKET || "",
     accessKeyId: env.GOZUNGA_ACCESS_KEY || "",
     secretAccessKey: env.GOZUNGA_SECRET_KEY || "",
+    region: env.GOZUNGA_REGION || "SiouxFalls",
   };
 }
 
@@ -31,13 +33,15 @@ function storageReady(env) {
 async function storageRequest(env, method, key, body, headers = {}) {
   const s = storageConfig(env);
   if (!storageReady(env)) throw new Error("Gozunga storage credentials are not configured.");
+
   const url = `${s.endpoint}/${encodeURIComponent(s.bucket)}/${key.split("/").map(encodeURIComponent).join("/")}`;
   const client = new AwsClient({
     accessKeyId: s.accessKeyId,
     secretAccessKey: s.secretAccessKey,
     service: "s3",
-    region: "SiouxFalls",
+    region: s.region,
   });
+
   return client.fetch(url, { method, headers, body });
 }
 
@@ -50,6 +54,7 @@ export default {
     }
 
     if (url.pathname === "/api/health") {
+      const storage = storageConfig(env);
       return json({
         ok: true,
         app: env.APP_NAME || "Howard's Digital",
@@ -57,6 +62,8 @@ export default {
         storage: {
           provider: env.STORAGE_PROVIDER || "Gozunga",
           configured: storageReady(env),
+          endpoint: storage.endpoint,
+          region: storage.region,
           database: Boolean(env.HD_DB),
         },
       }, 200, corsHeaders);
@@ -96,6 +103,7 @@ export default {
         "content-type": file.type || "application/octet-stream",
         "content-length": String(file.size),
       });
+
       if (!response.ok) {
         const detail = await response.text();
         return json({ ok: false, error: `Storage upload failed (${response.status}).`, detail: detail.slice(0, 500) }, 502, corsHeaders);
@@ -105,15 +113,26 @@ export default {
         "INSERT INTO files (file_id, project_id, filename, size_bytes, content_type, storage_key) VALUES (?, ?, ?, ?, ?, ?)"
       ).bind(fileId, projectId, safeName, file.size, file.type || "application/octet-stream", storageKey).run();
 
-      return json({ ok: true, file: { file_id: fileId, project_id: projectId, filename: safeName, size_bytes: file.size, content_type: file.type || "application/octet-stream" } }, 201, corsHeaders);
+      return json({
+        ok: true,
+        file: {
+          file_id: fileId,
+          project_id: projectId,
+          filename: safeName,
+          size_bytes: file.size,
+          content_type: file.type || "application/octet-stream"
+        }
+      }, 201, corsHeaders);
     }
 
     if (url.pathname.startsWith("/api/files/") && request.method === "GET") {
       const fileId = url.pathname.split("/").pop();
       if (!env.HD_DB) return json({ ok: false, error: "Database is not configured." }, 503, corsHeaders);
+
       const row = await env.HD_DB.prepare(
         "SELECT filename, content_type, storage_key FROM files WHERE file_id = ?"
       ).bind(fileId).first();
+
       if (!row) return json({ ok: false, error: "File not found." }, 404, corsHeaders);
 
       const response = await storageRequest(env, "GET", row.storage_key);
