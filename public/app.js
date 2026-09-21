@@ -52,6 +52,10 @@ const SECTION_TYPES = {
   files:    { label: 'Files', desc: 'Upload files and share them with a link.' },
   links:    { label: 'Links', desc: 'Your own list of favorite links.' },
   notes:    { label: 'Notes', desc: 'Quick notes, saved automatically on HD.' },
+  chatgpt:  { label: 'ChatGPT', desc: 'Ask anything — opens the real ChatGPT.' },
+  claude:   { label: 'Claude', desc: 'Open Claude in a new tab.' },
+  grok:     { label: 'Grok', desc: 'Open Grok in a new tab.' },
+  quicklaunch: { label: 'Quick Launch', desc: 'A compact row of shortcuts near the top.' },
 };
 const TYPES_WITH_SETTINGS = new Set(['weather', 'sports', 'youtube', 'links', 'notes']);
 
@@ -614,6 +618,7 @@ async function renderFilesSection(section, body) {
         <div class="file-row">
           <div><strong>${escapeHtml(f.filename)}</strong><br><small>${fmtSize(f.size)} • ${escapeHtml(new Date(f.created_at).toLocaleDateString())}</small></div>
           <div class="file-actions">
+            ${f.url ? `<a class="file-open" href="${escapeHtml(f.url)}" target="_blank" rel="noopener">Open</a>` : ''}
             ${f.url ? `<button type="button" data-copy="${escapeHtml(f.url)}">Copy link</button>` : ''}
             <button type="button" data-del="${escapeHtml(f.id)}" class="danger">Delete</button>
           </div>
@@ -742,6 +747,51 @@ function renderNotesSection(section, body) {
   });
 }
 
+/* ---------- AI launchers + Quick Launch (real services, no fake AI) ---------- */
+const AI_SITES = {
+  chatgpt: { name: 'ChatGPT', url: 'https://chatgpt.com', cta: 'Ask anything.' },
+  claude:  { name: 'Claude',  url: 'https://claude.ai',   cta: 'Start a conversation.' },
+  grok:    { name: 'Grok',    url: 'https://grok.com',     cta: 'Ask Grok anything.' },
+};
+
+function renderAiLauncher(body, type) {
+  const site = AI_SITES[type];
+  if (!site) { body.innerHTML = '<div class="empty">This launcher is unavailable.</div>'; return; }
+  body.innerHTML = `
+    <div class="ai-launcher">
+      <p class="ai-cta">${escapeHtml(site.cta)}</p>
+      <a class="ai-open" href="${site.url}" target="_blank" rel="noopener">Open ${escapeHtml(site.name)} ↗</a>
+      <p class="muted">Opens the real ${escapeHtml(site.name)} in a new tab — your own account, nothing faked.</p>
+    </div>`;
+}
+
+function renderQuickLaunch(body) {
+  const cards = [...dashboardEl.querySelectorAll('.section-card')];
+  const cardForType = (t) => cards.find(c => c.classList.contains(`section-${t}`));
+  const scrollInto = (card) => { if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+  // Chase: prefer a section whose title mentions Chase (e.g. "Chase Adventures");
+  // otherwise fall back to the Projects card; omit the button if neither exists.
+  const chaseCard = cards.find(c => /chase/i.test(c.querySelector('.card-title h2')?.textContent || ''));
+  const items = [
+    { label: 'ChatGPT', href: AI_SITES.chatgpt.url, external: true },
+    { label: 'Claude', href: AI_SITES.claude.url, external: true },
+    { label: 'Grok', href: AI_SITES.grok.url, external: true },
+  ];
+  if (cardForType('files')) items.push({ label: 'Files', action: () => scrollInto(cardForType('files')) });
+  if (chaseCard || cardForType('projects')) {
+    items.push({ label: 'Chase', action: () => scrollInto(chaseCard || cardForType('projects')) });
+  }
+  if (cardForType('youtube')) items.push({ label: 'YouTube', action: () => scrollInto(cardForType('youtube')) });
+
+  body.innerHTML = `<div class="quick-launch">${items.map((it, i) =>
+    it.external
+      ? `<a class="ql-btn" href="${it.href}" target="_blank" rel="noopener">${escapeHtml(it.label)}</a>`
+      : `<button type="button" class="ql-btn" data-ql="${i}">${escapeHtml(it.label)}</button>`
+  ).join('')}</div>`;
+  body.querySelectorAll('[data-ql]').forEach(btn =>
+    btn.addEventListener('click', () => items[Number(btn.dataset.ql)].action()));
+}
+
 /* ---------- Settings dispatcher ---------- */
 function buildSettingsPane(section, pane, body) {
   const builders = {
@@ -789,6 +839,10 @@ const RENDERERS = {
   files: renderFilesSection,
   links: renderLinksSection,
   notes: renderNotesSection,
+  chatgpt: (s, b) => renderAiLauncher(b, 'chatgpt'),
+  claude: (s, b) => renderAiLauncher(b, 'claude'),
+  grok: (s, b) => renderAiLauncher(b, 'grok'),
+  quicklaunch: (s, b) => renderQuickLaunch(b),
 };
 
 function render() {

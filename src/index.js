@@ -18,6 +18,7 @@ const MAX_SETTINGS_BYTES = 32 * 1024; // 32 KB per section settings object
 const SECTION_TYPES = new Set([
   "greeting", "search", "weather", "sports", "youtube",
   "projects", "files", "links", "notes",
+  "chatgpt", "claude", "grok", "quicklaunch",
 ]);
 
 function randomToken() {
@@ -313,6 +314,7 @@ function defaultTitleFor(type) {
     greeting: "Welcome", search: "Search", weather: "Weather",
     sports: "My Teams", youtube: "YouTube", projects: "Projects",
     files: "Files", links: "Links", notes: "Notes",
+    chatgpt: "ChatGPT", claude: "Claude", grok: "Grok", quicklaunch: "Quick Launch",
   }[type] || "Section";
 }
 
