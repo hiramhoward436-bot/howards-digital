@@ -340,8 +340,9 @@ export default {
       return json({ ok: true }, 200, corsHeaders);
     }
 
-    // Public share link: /f/:token
-    if (url.pathname.startsWith("/f/") && request.method === "GET") {
+    // Public share link: /f/:token (GET and HEAD — AI fetchers often
+    // probe with HEAD first; add CORS so other AIs can fetch directly)
+    if (url.pathname.startsWith("/f/") && (request.method === "GET" || request.method === "HEAD")) {
       const token = url.pathname.slice(3).split("/")[0];
       if (env.HD_DB && token) {
         const row = await env.HD_DB.prepare(
@@ -360,11 +361,13 @@ export default {
             const disposition = previewable
               ? `inline; filename*=UTF-8''${encodeURIComponent(filename)}`
               : `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
-            return new Response(data, {
+            return new Response(request.method === "HEAD" ? null : data, {
               headers: {
                 "content-type": mime,
                 "content-disposition": disposition,
-                "cache-control": "private, max-age=3600",
+                "content-length": String(data.byteLength),
+                "cache-control": "public, max-age=31536000, immutable",
+                "access-control-allow-origin": "*",
               },
             });
           }
