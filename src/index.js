@@ -190,37 +190,55 @@ export default {
     }
 
     // ---- "My Day" data: today's cached calendar events ----
-    // The day_cache table is populated by a scheduled job (from the user's
-    // paired iPhone calendar). Empty table = empty list = the widget says
-    // "Nothing on the calendar today." Nothing here is ever invented.
+    // Primary source: the My Day widget's own section settings
+    // (settings.dayEvents = {date, events}), written by a scheduled job that
+    // reads the user's paired iPhone calendar and PUTs to
+    // /api/sections/sec-myday — no extra credentials needed. Falls back to
+    // the day_cache table (older sync path). Empty = empty list = the widget
+    // says "Nothing on the calendar today." Nothing here is ever invented.
 
     if (url.pathname === "/api/today" && request.method === "GET") {
       const today = new Date().toISOString().slice(0, 10);
       if (!env.HD_DB) return json({ date: today, events: [] }, 200, corsHeaders);
       let date = today;
       let events = [];
+      let fromSettings = false;
+      const sanitize = (list) =>
+        (Array.isArray(list) ? list : [])
+          .filter((e) => e && typeof e === "object")
+          .map((e) => ({
+            title: String(e.title || "").slice(0, 120),
+            time: String(e.time || "").slice(0, 40),
+          }))
+          .filter((e) => e.title);
       try {
-        const row = await env.HD_DB.prepare(
-          "SELECT date, events FROM day_cache WHERE id = 1"
+        const sec = await env.HD_DB.prepare(
+          "SELECT settings FROM sections WHERE id = 'sec-myday'"
         ).first();
-        if (row) {
-          if (typeof row.date === "string" && row.date) date = row.date;
-          try {
-            const parsed = JSON.parse(row.events || "[]");
-            if (Array.isArray(parsed)) {
-              events = parsed
-                .filter((e) => e && typeof e === "object")
-                .map((e) => ({
-                  title: String(e.title || "").slice(0, 120),
-                  time: String(e.time || "").slice(0, 40),
-                }))
-                .filter((e) => e.title);
-            }
-          } catch { /* malformed cache: treat as empty */ }
+        if (sec && typeof sec.settings === "string") {
+          const s = JSON.parse(sec.settings || "{}");
+          if (s && typeof s === "object" && s.dayEvents && typeof s.dayEvents === "object") {
+            fromSettings = true;
+            if (typeof s.dayEvents.date === "string" && s.dayEvents.date) date = s.dayEvents.date;
+            events = sanitize(s.dayEvents.events);
+          }
         }
-      } catch {
-        // Table missing on older DBs: return the honest empty state.
-        events = [];
+      } catch { /* fall through to day_cache */ }
+      if (!fromSettings) {
+        try {
+          const row = await env.HD_DB.prepare(
+            "SELECT date, events FROM day_cache WHERE id = 1"
+          ).first();
+          if (row) {
+            if (typeof row.date === "string" && row.date) date = row.date;
+            try {
+              events = sanitize(JSON.parse(row.events || "[]"));
+            } catch { /* malformed cache: treat as empty */ }
+          }
+        } catch {
+          // Table missing on older DBs: return the honest empty state.
+          events = [];
+        }
       }
       return json({ date, events }, 200, corsHeaders);
     }
