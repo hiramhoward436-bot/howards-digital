@@ -5,6 +5,8 @@ const filesEl = document.querySelector('#files');
 const uploadForm = document.querySelector('#upload-form');
 const uploadButton = document.querySelector('#upload-button');
 const uploadStatus = document.querySelector('#upload-status');
+const dropzone = document.querySelector('.dropzone');
+const fileInput = document.querySelector('#file-input');
 
 async function loadProjects() {
   listEl.innerHTML = '<div class="empty">Loading projects…</div>';
@@ -48,9 +50,35 @@ async function loadFiles() {
   }
 }
 
+function setSelectedFile(file) {
+  if (!file) return;
+  const transfer = new DataTransfer();
+  transfer.items.add(file);
+  fileInput.files = transfer.files;
+  uploadStatus.textContent = 'Ready: ' + file.name;
+}
+
+dropzone.addEventListener('dragover', (event) => {
+  event.preventDefault();
+  dropzone.classList.add('dragover');
+});
+
+dropzone.addEventListener('dragleave', () => {
+  dropzone.classList.remove('dragover');
+});
+
+dropzone.addEventListener('drop', (event) => {
+  event.preventDefault();
+  dropzone.classList.remove('dragover');
+  setSelectedFile(event.dataTransfer.files[0]);
+});
+
+fileInput.addEventListener('change', () => {
+  setSelectedFile(fileInput.files[0]);
+});
+
 uploadForm.addEventListener('submit', async (event) => {
   event.preventDefault();
-  const fileInput = document.querySelector('#file-input');
   if (!fileInput.files.length) return;
   uploadButton.disabled = true;
   uploadStatus.textContent = 'Uploading…';
