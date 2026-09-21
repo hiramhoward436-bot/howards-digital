@@ -361,14 +361,43 @@ export default {
             const disposition = previewable
               ? `inline; filename*=UTF-8''${encodeURIComponent(filename)}`
               : `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+            const total = data.byteLength;
+            const fileHeaders = {
+              "content-type": mime,
+              "content-disposition": disposition,
+              "cache-control": "public, max-age=31536000, immutable",
+              "access-control-allow-origin": "*",
+              "accept-ranges": "bytes",
+            };
+            // Honor byte-range requests like a plain file host: some
+            // fetchers resume or probe with Range.
+            if (request.method === "GET") {
+              const rm = /^bytes=(\d*)-(\d*)$/.exec(
+                (request.headers.get("range") || "").trim()
+              );
+              if (rm && (rm[1] !== "" || rm[2] !== "")) {
+                let start = rm[1] === "" ? total - parseInt(rm[2], 10) : parseInt(rm[1], 10);
+                let end = rm[2] === "" ? total - 1 : parseInt(rm[2], 10);
+                if (Number.isNaN(start) || Number.isNaN(end) || start < 0 || end < start || start >= total) {
+                  return new Response("Range not satisfiable", {
+                    status: 416,
+                    headers: { ...fileHeaders, "content-range": `bytes */${total}` },
+                  });
+                }
+                end = Math.min(end, total - 1);
+                const slice = data.slice(start, end + 1);
+                return new Response(slice, {
+                  status: 206,
+                  headers: {
+                    ...fileHeaders,
+                    "content-range": `bytes ${start}-${end}/${total}`,
+                    "content-length": String(slice.byteLength),
+                  },
+                });
+              }
+            }
             return new Response(request.method === "HEAD" ? null : data, {
-              headers: {
-                "content-type": mime,
-                "content-disposition": disposition,
-                "content-length": String(data.byteLength),
-                "cache-control": "public, max-age=31536000, immutable",
-                "access-control-allow-origin": "*",
-              },
+              headers: { ...fileHeaders, "content-length": String(total) },
             });
           }
         }
