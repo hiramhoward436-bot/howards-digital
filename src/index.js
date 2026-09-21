@@ -232,12 +232,16 @@ export default {
       ).run();
       // Metadata row first: file_contents.file_id references files(file_id).
       await getStorage(env).put(fileId, bytes);
+      // Share URL carries the original filename: AI readers (ChatGPT, Grok)
+      // key off the filename in the URL to recognize the file type.
+      // The /f/:token route ignores everything after the token, so old
+      // bare-token links keep working.
       return json({
         id: fileId,
         filename: file.name || "upload",
         size: file.size,
         type: file.type || "application/octet-stream",
-        url: `${url.origin}/f/${token}`,
+        url: `${url.origin}/f/${token}/${encodeURIComponent(file.name || "upload")}`,
       }, 201, corsHeaders);
     }
 
@@ -253,7 +257,7 @@ export default {
         size: f.size_bytes,
         type: f.content_type,
         created_at: f.created_at,
-        url: f.share_token ? `${url.origin}/f/${f.share_token}` : null,
+        url: f.share_token ? `${url.origin}/f/${f.share_token}/${encodeURIComponent(f.filename || "file")}` : null,
       }));
       return json({ files }, 200, corsHeaders);
     }
