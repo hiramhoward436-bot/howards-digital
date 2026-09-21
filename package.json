@@ -10,6 +10,6 @@
     "db:migrate:remote": "wrangler d1 migrations apply HD_DB --remote"
   },
   "devDependencies": {
-    "wrangler": "^4.0.0"
+    "wrangler": "^4.135.0"
   }
 }

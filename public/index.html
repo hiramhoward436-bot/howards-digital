@@ -4,51 +4,50 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Howard's Digital</title>
-  <meta name="description" content="Howard's Digital project file workspace">
+  <meta name="description" content="Harm's personal dashboard — weather, Kentucky sports, YouTube, projects, and files">
+  <meta name="theme-color" content="#0b1020">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Howard's Digital">
+  <link rel="apple-touch-icon" href="/logo.jpg">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <main class="shell">
     <header class="topbar">
-      <div>
-        <div class="eyebrow">HD • HOWARD'S DIGITAL</div>
-        <h1>Your project workspace.</h1>
-        <p>Store projects, organize files, and share what you need.</p>
+      <div class="topbar-inner">
+        <img src="/logo.jpg" alt="Howard's Digital logo" class="logo">
+        <h1 id="greeting">Welcome.</h1>
+        <p id="today">Your dashboard for the day.</p>
       </div>
-      <span id="status" class="status">Connecting…</span>
+      <div class="topbar-actions">
+        <span id="status" class="status">Connecting…</span>
+        <button type="button" id="add-section-btn" class="big-btn">＋ Add Section</button>
+      </div>
     </header>
 
-    <section class="grid">
-      <article class="card hero-card">
-        <span class="label">Projects</span>
-        <h2 id="project-count">—</h2>
-        <p>Projects currently registered in HD.</p>
-      </article>
-      <article class="card">
-        <span class="label">Storage</span>
-        <h2>R2</h2>
-        <p>Large files will live in object storage, separate from the database.</p>
-      </article>
-      <article class="card">
-        <span class="label">Database</span>
-        <h2>D1</h2>
-        <p>Projects, folders, file metadata, and shares.</p>
-      </article>
-    </section>
+    <div id="dashboard" class="dashboard" aria-live="polite">
+      <div class="empty">Loading your dashboard…</div>
+    </div>
 
-    <section class="card projects">
-      <div class="section-head">
-        <div>
-          <span class="label">Workspace</span>
-          <h2>Projects</h2>
-        </div>
-        <button type="button" id="refresh">Refresh</button>
-      </div>
-      <div id="projects" class="project-list">
-        <div class="empty">Loading projects…</div>
-      </div>
-    </section>
+    <div id="hidden-bar" class="hidden-bar" hidden>
+      <span class="label">Hidden sections</span>
+      <div id="hidden-list" class="hidden-list"></div>
+    </div>
   </main>
+
+  <div id="add-modal" class="modal-backdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="add-modal-title">
+      <div class="modal-head">
+        <h2 id="add-modal-title">Add a section</h2>
+        <button type="button" id="add-modal-close" aria-label="Close">✕</button>
+      </div>
+      <p class="muted">Pick what to add to your dashboard. You can rename, reorder, hide, or remove it later.</p>
+      <div id="type-picker" class="type-picker"></div>
+    </div>
+  </div>
+
   <script src="/app.js"></script>
 </body>
 </html>

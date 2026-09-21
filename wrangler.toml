@@ -1,4 +1,4 @@
-name = "howards-digital"
+name = "hd"
 main = "src/index.js"
 compatibility_date = "2026-09-12"
 
@@ -9,12 +9,14 @@ APP_VERSION = "0.1.0"
 [[d1_databases]]
 binding = "HD_DB"
 database_name = "howards-digital"
-database_id = "92430af1-7594-4fc5-8e7a-13d861777460"
+database_id = "4d3788c1-a07a-4c16-b092-1a6849b55d9e"
 migrations_dir = "migrations"
 
-[[r2_buckets]]
-binding = "HD_FILES"
-bucket_name = "howards-digital-files"
+# R2 bucket binding intentionally disabled: R2 requires a payment method on file
+# and Hiram declined. File uploads are stored as blobs in D1 instead (free tier).
+# [[r2_buckets]]
+# binding = "HD_FILES"
+# bucket_name = "howards-digital-files"
 
 [assets]
 directory = "./public"
