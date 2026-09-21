@@ -281,10 +281,20 @@ export default {
         if (row) {
           const data = await getStorage(env).get(row.file_id);
           if (data) {
+            const filename = row.filename || "file";
+            const mime = row.content_type || "application/octet-stream";
+            // Previewable types open in the browser; everything else
+            // downloads as an attachment with the original filename.
+            const previewable =
+              /^(image|text|audio|video)\//.test(mime) || mime === "application/pdf";
+            const asciiName = filename.replace(/["\\]/g, "_");
+            const disposition = previewable
+              ? `inline; filename*=UTF-8''${encodeURIComponent(filename)}`
+              : `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
             return new Response(data, {
               headers: {
-                "content-type": row.content_type || "application/octet-stream",
-                "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(row.filename || "file")}`,
+                "content-type": mime,
+                "content-disposition": disposition,
                 "cache-control": "private, max-age=3600",
               },
             });
