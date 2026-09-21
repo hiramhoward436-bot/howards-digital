@@ -18,7 +18,7 @@ const MAX_SETTINGS_BYTES = 32 * 1024; // 32 KB per section settings object
 const SECTION_TYPES = new Set([
   "greeting", "search", "weather", "sports", "youtube",
   "projects", "files", "links", "notes",
-  "ai", "quicklaunch",
+  "ai", "quicklinks", "myday",
 ]);
 
 function randomToken() {
@@ -189,6 +189,42 @@ export default {
       return json({ section: sectionRow(row) }, 200, corsHeaders);
     }
 
+    // ---- "My Day" data: today's cached calendar events ----
+    // The day_cache table is populated by a scheduled job (from the user's
+    // paired iPhone calendar). Empty table = empty list = the widget says
+    // "Nothing on the calendar today." Nothing here is ever invented.
+
+    if (url.pathname === "/api/today" && request.method === "GET") {
+      const today = new Date().toISOString().slice(0, 10);
+      if (!env.HD_DB) return json({ date: today, events: [] }, 200, corsHeaders);
+      let date = today;
+      let events = [];
+      try {
+        const row = await env.HD_DB.prepare(
+          "SELECT date, events FROM day_cache WHERE id = 1"
+        ).first();
+        if (row) {
+          if (typeof row.date === "string" && row.date) date = row.date;
+          try {
+            const parsed = JSON.parse(row.events || "[]");
+            if (Array.isArray(parsed)) {
+              events = parsed
+                .filter((e) => e && typeof e === "object")
+                .map((e) => ({
+                  title: String(e.title || "").slice(0, 120),
+                  time: String(e.time || "").slice(0, 40),
+                }))
+                .filter((e) => e.title);
+            }
+          } catch { /* malformed cache: treat as empty */ }
+        }
+      } catch {
+        // Table missing on older DBs: return the honest empty state.
+        events = [];
+      }
+      return json({ date, events }, 200, corsHeaders);
+    }
+
     // ---- YouTube channel RSS proxy (no API key needed) ----
     // Fetches a channel's public RSS feed server-side and returns the latest
     // videos as JSON. Used by the YouTube dashboard section.
@@ -328,7 +364,7 @@ function defaultTitleFor(type) {
     greeting: "Welcome", search: "Search", weather: "Weather",
     sports: "My Teams", youtube: "YouTube", projects: "Projects",
     files: "Files", links: "Links", notes: "Notes",
-    ai: "AI", quicklaunch: "Quick Launch",
+    ai: "AI", quicklinks: "Quick Links", myday: "My Day",
   }[type] || "Section";
 }
 

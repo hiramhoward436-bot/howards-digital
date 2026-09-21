@@ -1,10 +1,10 @@
-/* Howard's Digital — Phase 1 UI foundation: unified widget system.
+/* Howard's Digital — widget system (Phase 1 + Round 2 polish).
  * Every dashboard section renders as a consistent card on a flexible
- * 12-column grid (S/M/L sizes). Normal mode shows a subtle ⋯ menu per
- * card; the header Edit toggle reveals the full edit toolbar (drag,
- * move, resize, settings, rename, hide, remove). Layout, titles,
- * visibility, order, sizes, and per-section settings persist in D1 via
- * /api/sections. Device appearance prefs (TV mode, text size,
+ * 12-column grid (S/M/L sizes). Each card carries its own Edit button in
+ * the header (rename + widget settings); the ⋯ menu keeps Move / Resize /
+ * Hide / Remove; the header "Rearrange" toggle reveals the full drag toolbar.
+ * Layout, titles, visibility, order, sizes, and per-section settings persist
+ * in D1 via /api/sections. Device appearance prefs (TV mode, text size,
  * background) live in localStorage. No fake data: if a service is
  * unavailable or not configured, the card says so honestly.
  */
@@ -49,6 +49,7 @@ function fmtDay(iso) {
  * ONLY types listed here appear in the + Add Section catalog — every one
  * of them is a real, working widget. Nothing fake, nothing dead. */
 const SECTION_TYPES = {
+  myday:   { label: 'My Day', desc: 'Clock, date, weather, and what\u2019s next today.' },
   greeting: { label: 'Greeting', desc: 'A welcome banner with the time of day.' },
   search:   { label: 'Search', desc: 'A Google search bar.' },
   weather:  { label: 'Weather', desc: 'Current conditions. Tap for a 5-day forecast.' },
@@ -59,16 +60,16 @@ const SECTION_TYPES = {
   links:    { label: 'Links', desc: 'Your own list of favorite links.' },
   notes:    { label: 'Notes', desc: 'Quick notes, saved automatically on HD.' },
   ai:         { label: 'AI', desc: 'Your AI launchers — pick which services appear inside.' },
-  quicklaunch: { label: 'Quick Launch', desc: 'A compact row of shortcuts near the top.' },
+  quicklinks: { label: 'Quick Links', desc: 'The sites you open every day — one tap away.' },
 };
 const TYPE_GROUPS = [
-  { title: 'Essentials', types: ['greeting', 'search', 'quicklaunch'] },
+  { title: 'Essentials', types: ['myday', 'greeting', 'search', 'quicklinks'] },
   { title: 'Information', types: ['weather', 'sports'] },
   { title: 'Media', types: ['youtube'] },
   { title: 'Personal', types: ['projects', 'files', 'links', 'notes'] },
   { title: 'AI', types: ['ai'] },
 ];
-const TYPES_WITH_SETTINGS = new Set(['weather', 'sports', 'youtube', 'links', 'ai']);
+const TYPES_WITH_SETTINGS = new Set(['weather', 'sports', 'youtube', 'links', 'ai', 'quicklinks']);
 const SIZES = ['S', 'M', 'L'];
 const SIZE_NAMES = { S: 'Small', M: 'Medium', L: 'Large' };
 
@@ -195,6 +196,7 @@ function cardShell(section) {
   head.innerHTML = `
     <div class="card-title"><span class="label">${escapeHtml(SECTION_TYPES[section.type]?.label || section.type)}</span>
     <h2>${escapeHtml(section.title)}</h2></div>
+    <button type="button" class="card-edit-btn" title="Edit this widget" aria-label="Edit ${escapeHtml(section.title)}">Edit</button>
     <div class="card-menu-wrap">
       <button type="button" class="card-menu-btn" aria-haspopup="menu" aria-expanded="false"
         aria-label="Section menu" title="Section menu">⋯</button>
@@ -204,7 +206,6 @@ function cardShell(section) {
       <button type="button" class="drag-handle" title="Drag to reorder" aria-label="Drag to reorder section">⋮⋮</button>
       <button type="button" data-act="up" title="Move up" aria-label="Move section up">▲</button>
       <button type="button" data-act="down" title="Move down" aria-label="Move section down">▼</button>
-      ${TYPES_WITH_SETTINGS.has(section.type) ? '<button type="button" data-act="settings" title="Edit" aria-label="Edit section">⚙</button>' : ''}
       <button type="button" data-act="rename" title="Rename" aria-label="Rename section">✏️</button>
       <div class="size-seg" role="group" aria-label="Card size">
         ${SIZES.map(s => `<button type="button" data-size="${s}" aria-pressed="${s === size}" title="${SIZE_NAMES[s]}">${s}</button>`).join('')}
@@ -216,25 +217,50 @@ function cardShell(section) {
   const body = document.createElement('div');
   body.className = 'card-body';
 
+  // Rename bar: part of every card's Edit surface (works for all types,
+  // survives settings-pane re-renders because it is a sibling, not a child).
+  const renameBar = document.createElement('div');
+  renameBar.className = 'rename-bar';
+  renameBar.hidden = true;
+  renameBar.innerHTML = `
+    <form class="rename-form">
+      <label>Widget name <input name="title" value="${escapeHtml(section.title)}" maxlength="120" aria-label="Widget name"></label>
+      <button type="submit">Save</button>
+    </form>`;
+
   const settingsPane = document.createElement('div');
   settingsPane.className = 'settings-pane';
   settingsPane.hidden = true;
 
-  card.append(head, settingsPane, body);
+  card.append(head, renameBar, settingsPane, body);
 
   const menuBtn = $('.card-menu-btn', head);
   const menu = $('.card-menu', head);
   menuBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    toggleCardMenu(section, menuBtn, menu, settingsPane, body);
+    toggleCardMenu(section, menuBtn, menu, settingsPane, renameBar, body);
+  });
+  $('.card-edit-btn', head).addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeCardMenu();
+    toggleSettingsPane(section, settingsPane, renameBar, body);
+  });
+  $('.rename-form', renameBar).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = e.target.title.value.trim();
+    if (!name || name === section.title) return;
+    try {
+      await saveSection(section.id, { title: name });
+      render();
+    } catch (err) { alert(err.message); }
   });
 
   head.querySelector('.card-controls').addEventListener('click', (e) => {
     const sizeBtn = e.target.closest('[data-size]');
     if (sizeBtn) { e.stopPropagation(); setSectionSize(section.id, sizeBtn.dataset.size); return; }
-    onCardControl(e, section, settingsPane, body);
+    onCardControl(e, section, settingsPane, renameBar, body);
   });
-  return { card, body, settingsPane };
+  return { card, body, settingsPane, renameBar };
 }
 
 function sizeSegHtml(size) {
@@ -243,11 +269,9 @@ function sizeSegHtml(size) {
   ).join('');
 }
 
-function buildCardMenu(section, menu, settingsPane, body) {
+function buildCardMenu(section, menu, settingsPane, renameBar, body) {
   const size = sectionSize(section);
-  const hasSettings = TYPES_WITH_SETTINGS.has(section.type);
   menu.innerHTML = `
-    ${hasSettings ? `<button type="button" class="card-menu-item" role="menuitem" data-m="edit"><span class="mi">⚙</span>Edit</button>` : ''}
     <button type="button" class="card-menu-item" role="menuitem" data-m="up"><span class="mi">▲</span>Move up</button>
     <button type="button" class="card-menu-item" role="menuitem" data-m="down"><span class="mi">▼</span>Move down</button>
     <div class="card-menu-sep"></div>
@@ -260,7 +284,7 @@ function buildCardMenu(section, menu, settingsPane, body) {
   menu.querySelectorAll('[data-m]').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
     closeCardMenu();
-    sectionAction(section, btn.dataset.m, settingsPane, body);
+    sectionAction(section, btn.dataset.m, settingsPane, renameBar, body);
   }));
   menu.querySelectorAll('[data-msize]').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -279,10 +303,10 @@ function closeCardMenu() {
   }
 }
 
-function toggleCardMenu(section, btn, menu, settingsPane, body) {
+function toggleCardMenu(section, btn, menu, settingsPane, renameBar, body) {
   if (openMenu && openMenu.menu === menu) { closeCardMenu(); return; }
   closeCardMenu();
-  buildCardMenu(section, menu, settingsPane, body);
+  buildCardMenu(section, menu, settingsPane, renameBar, body);
   menu.hidden = false;
   btn.setAttribute('aria-expanded', 'true');
   openMenu = { btn, menu };
@@ -290,9 +314,11 @@ function toggleCardMenu(section, btn, menu, settingsPane, body) {
   setTimeout(() => document.addEventListener('click', closeCardMenu), 0);
 }
 
-function toggleSettingsPane(section, settingsPane, body) {
-  settingsPane.hidden = !settingsPane.hidden;
-  if (!settingsPane.hidden && !settingsPane.dataset.built) {
+function toggleSettingsPane(section, settingsPane, renameBar, body) {
+  const opening = settingsPane.hidden;
+  settingsPane.hidden = !opening;
+  renameBar.hidden = !opening;
+  if (opening && !settingsPane.dataset.built) {
     settingsPane.dataset.built = '1';
     buildSettingsPane(section, settingsPane, body);
   }
@@ -312,7 +338,7 @@ async function setSectionSize(id, size) {
   }
 }
 
-async function sectionAction(section, act, settingsPane, body) {
+async function sectionAction(section, act, settingsPane, renameBar, body) {
   try {
     if (act === 'remove') {
       if (!confirm(`Remove "${section.title}" from your dashboard?`)) return;
@@ -331,18 +357,18 @@ async function sectionAction(section, act, settingsPane, body) {
     } else if (act === 'up' || act === 'down') {
       moveSection(section.id, act === 'up' ? -1 : 1);
     } else if (act === 'edit' || act === 'settings') {
-      toggleSettingsPane(section, settingsPane, body);
+      toggleSettingsPane(section, settingsPane, renameBar, body);
     }
   } catch (err) {
     alert(err.message);
   }
 }
 
-async function onCardControl(event, section, settingsPane, body) {
+async function onCardControl(event, section, settingsPane, renameBar, body) {
   const btn = event.target.closest('[data-act]');
   if (!btn) return;
   event.stopPropagation();
-  sectionAction(section, btn.dataset.act, settingsPane, body);
+  sectionAction(section, btn.dataset.act, settingsPane, renameBar, body);
 }
 
 async function moveSection(id, dir) {
@@ -711,7 +737,7 @@ function scheduleUrl(sport, teamId) {
 async function renderSportsSection(section, body) {
   const teams = (section.settings && section.settings.teams) || [];
   if (!teams.length) {
-    showEmpty(body, '🏈', 'No teams yet.', 'Open the section menu (⋯) → Edit to follow a team.');
+    showEmpty(body, '🏈', 'No teams yet.', 'Tap Edit on this card to follow a team.');
     return;
   }
   showLoading(body, 4);
@@ -843,7 +869,7 @@ function extractChannelId(input) {
 async function renderYouTubeSection(section, body) {
   const channels = (section.settings && section.settings.channels) || [];
   if (!channels.length) {
-    showEmpty(body, '📺', 'No channels yet.', 'Open the section menu (⋯) → Edit to add one. YouTube sign-in is coming later.');
+    showEmpty(body, '📺', 'No channels yet.', 'Tap Edit on this card to add one. YouTube sign-in is coming later.');
     return;
   }
   showLoading(body, 4);
@@ -1029,7 +1055,7 @@ async function renderFilesSection(section, body) {
 function renderLinksSection(section, body) {
   const links = (section.settings && section.settings.links) || [];
   if (!links.length) {
-    showEmpty(body, '🔗', 'No links yet.', 'Open the section menu (⋯) → Edit to add some.');
+    showEmpty(body, '🔗', 'No links yet.', 'Tap Edit on this card to add some.');
     return;
   }
   body.innerHTML = `
@@ -1137,7 +1163,7 @@ function renderAiSection(section, body) {
   const cfg = aiConfig(section.settings);
   if (!cfg.services.length) {
     showEmpty(body, '🤖', 'No AI services selected yet.',
-      'Use the ⋯ menu → Edit to pick which AIs appear here.');
+      'Tap Edit on this card to pick which AIs appear here.');
     return;
   }
   const byId = new Map(cfg.services.map(s => [s.id, s]));
@@ -1269,31 +1295,175 @@ function buildAiSettings(section, pane, body) {
   render();
 }
 
-function renderQuickLaunch(body) {
-  const cards = [...dashboardEl.querySelectorAll('.section-card')];
-  const cardForType = (t) => cards.find(c => c.classList.contains(`section-${t}`));
-  const scrollInto = (card) => { if (card) card.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
-  // Chase: prefer a section whose title mentions Chase (e.g. "Chase Adventures");
-  // otherwise fall back to the Projects card; omit the button if neither exists.
-  const chaseCard = cards.find(c => /chase/i.test(c.querySelector('.card-title h2')?.textContent || ''));
-  const items = [
-    { label: 'ChatGPT', href: AI_CATALOG.chatgpt.url, external: true },
-    { label: 'Claude', href: AI_CATALOG.claude.url, external: true },
-    { label: 'Grok', href: AI_CATALOG.grok.url, external: true },
-  ];
-  if (cardForType('files')) items.push({ label: 'Files', action: () => scrollInto(cardForType('files')) });
-  if (chaseCard || cardForType('projects')) {
-    items.push({ label: 'Chase', action: () => scrollInto(chaseCard || cardForType('projects')) });
-  }
-  if (cardForType('youtube')) items.push({ label: 'YouTube', action: () => scrollInto(cardForType('youtube')) });
+/* ---------- Quick Links (user-managed external bookmarks) ----------
+ * Each entry is {name, url}. Only https:// URLs are kept; anything else
+ * (including javascript:) is dropped on read and rejected on save. */
+function cleanHttpUrl(raw) {
+  const v = String(raw || '').trim();
+  if (!/^https:\/\//i.test(v)) return null;
+  try {
+    const u = new URL(v);
+    return u.protocol === 'https:' ? u.href : null;
+  } catch { return null; }
+}
 
-  body.innerHTML = `<div class="quick-launch">${items.map((it, i) =>
-    it.external
-      ? `<a class="ql-btn" href="${it.href}" target="_blank" rel="noopener">${escapeHtml(it.label)}</a>`
-      : `<button type="button" class="ql-btn" data-ql="${i}">${escapeHtml(it.label)}</button>`
-  ).join('')}</div>`;
-  body.querySelectorAll('[data-ql]').forEach(btn =>
-    btn.addEventListener('click', () => items[Number(btn.dataset.ql)].action()));
+function quickLinksConfig(settings) {
+  const s = (settings && typeof settings === 'object') ? settings : {};
+  const out = [];
+  const seen = new Set();
+  for (const raw of (Array.isArray(s.links) ? s.links : [])) {
+    if (!raw || typeof raw !== 'object') continue;
+    const name = String(raw.name || '').trim();
+    const url = cleanHttpUrl(raw.url);
+    if (!name || !url) continue;
+    const key = url.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ name: name.slice(0, 60), url });
+  }
+  return out;
+}
+
+function renderQuickLinksSection(section, body) {
+  const links = quickLinksConfig(section.settings);
+  if (!links.length) {
+    body.innerHTML = `<div class="empty">
+      <span class="empty-icon" aria-hidden="true">🔖</span>
+      <div>Add your first link — the sites you open every day, one tap away.</div>
+      <button type="button" data-ql-add>Add a link</button>
+    </div>`;
+    body.querySelector('[data-ql-add]').addEventListener('click', () => {
+      const card = body.closest('.section-card');
+      toggleSettingsPane(section, $('.settings-pane', card), $('.rename-bar', card), body);
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return;
+  }
+  body.innerHTML = `<div class="quick-launch">${links.map(l => `
+    <a class="ql-btn" href="${escapeHtml(l.url)}" target="_blank" rel="noopener">${escapeHtml(l.name)}</a>`).join('')}</div>`;
+}
+
+function buildQuickLinksSettings(section, pane, body) {
+  const render = () => {
+    const raw = (getSection(section.id).settings?.links) || [];
+    const rows = raw.map(r => ({ name: String(r?.name || ''), url: String(r?.url || '') }));
+    pane.innerHTML = `
+      <p class="muted" style="margin-top:0">Each link opens in a new tab. Addresses must start with https://</p>
+      <div class="settings-list">${rows.map((r, i) => `
+        <div class="settings-row link-edit">
+          <div class="link-fields">
+            <input data-f="name" data-i="${i}" value="${escapeHtml(r.name)}" placeholder="Name (e.g. Bank)" aria-label="Link name">
+            <input data-f="url" data-i="${i}" value="${escapeHtml(r.url)}" placeholder="https://…" inputmode="url" aria-label="Link address">
+          </div>
+          <button type="button" data-rm="${i}" class="danger">Remove</button>
+        </div>`).join('') || '<div class="empty">No links yet — add your first below.</div>'}</div>
+      <div class="form-row" style="margin-top:12px">
+        <button type="button" id="qlink-add">＋ Add link</button>
+        <button type="button" id="qlink-save">Save links</button>
+      </div>
+      <p class="muted qlink-hint" aria-live="polite"></p>`;
+    $('#qlink-add', pane).addEventListener('click', async () => {
+      await saveSection(section.id, { settings: { links: [...rows, { name: '', url: 'https://' }] } });
+      render();
+    });
+    pane.querySelectorAll('[data-rm]').forEach(btn => btn.addEventListener('click', async () => {
+      const next = rows.filter((_, i) => i !== Number(btn.dataset.rm));
+      await saveSection(section.id, { settings: { links: next } });
+      render();
+      renderQuickLinksSection(getSection(section.id), body);
+    }));
+    $('#qlink-save', pane).addEventListener('click', async () => {
+      const hint = $('.qlink-hint', pane);
+      const next = [];
+      let skipped = 0;
+      rows.forEach((_, i) => {
+        const name = pane.querySelector(`[data-f="name"][data-i="${i}"]`).value.trim();
+        const urlRaw = pane.querySelector(`[data-f="url"][data-i="${i}"]`).value;
+        const url = cleanHttpUrl(urlRaw);
+        if (!name && !urlRaw.trim()) return; // untouched blank row
+        if (!name || !url) { skipped++; return; }
+        next.push({ name: name.slice(0, 60), url });
+      });
+      await saveSection(section.id, { settings: { links: next } });
+      renderQuickLinksSection(getSection(section.id), body);
+      render();
+      hint.textContent = skipped
+        ? `Saved. Skipped ${skipped} — ${skipped === 1 ? 'it needs' : 'they need'} a name and an https:// address.`
+        : 'Links saved.';
+    });
+  };
+  render();
+}
+
+/* ---------- My Day (clock, date, weather one-liner, what's next) ----------
+ * The weather one-liner reuses the Weather widget's own settings/location
+ * and the same forecast source. "Up next" reads GET /api/today, which is
+ * fed by a scheduled job from the user's paired calendar — if it's empty,
+ * the widget says so honestly. Nothing here is ever invented. */
+let myDayTimer = 0;
+
+function renderMyDaySection(section, body) {
+  body.innerHTML = `
+    <div class="myday">
+      <div class="myday-clock" data-clock>--:--</div>
+      <div class="myday-meta">
+        <div class="myday-date" data-date></div>
+        <div class="myday-line muted" data-wx>Checking weather…</div>
+        <div class="myday-next" data-next>Checking your calendar…</div>
+      </div>
+    </div>`;
+  const tick = () => {
+    const el = body.querySelector('[data-clock]');
+    if (el) el.textContent = new Date().toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  };
+  tick();
+  if (myDayTimer) clearInterval(myDayTimer);
+  myDayTimer = setInterval(tick, 15000);
+  const dateEl = body.querySelector('[data-date]');
+  if (dateEl) dateEl.textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  loadMyDayWeather(body);
+  loadMyDayNext(body);
+}
+
+async function loadMyDayWeather(body) {
+  const el = body.querySelector('[data-wx]');
+  if (!el) return;
+  const wxSection = sections.find(s => s.type === 'weather' && s.enabled);
+  const s = (wxSection && wxSection.settings) || {};
+  let lat = Number(s.lat), lon = Number(s.lon);
+  if (!isFinite(lat) || !isFinite(lon)) { lat = 38.04; lon = -84.50; }
+  try {
+    const resp = await fetch(weatherUrl(lat, lon));
+    if (!resp.ok) throw new Error(`weather HTTP ${resp.status}`);
+    const data = await resp.json();
+    const cur = data.current || {};
+    const hi = Math.round(data.daily.temperature_2m_max[0]);
+    const lo = Math.round(data.daily.temperature_2m_min[0]);
+    const label = s.location || 'Lexington, KY';
+    el.textContent = `${wxEmoji(cur.weather_code)} ${Math.round(cur.temperature_2m)}°F ${WX_CODE[cur.weather_code] || ''} — H ${hi}° / L ${lo}° • ${label}`;
+  } catch {
+    el.textContent = 'Weather is unavailable right now.';
+  }
+}
+
+async function loadMyDayNext(body) {
+  const el = body.querySelector('[data-next]');
+  if (!el) return;
+  try {
+    const res = await fetch('/api/today');
+    if (!res.ok) throw new Error('today unavailable');
+    const data = await res.json();
+    const events = Array.isArray(data.events) ? data.events : [];
+    if (!events.length) {
+      el.innerHTML = '<span class="muted">Nothing on the calendar today.</span>';
+      return;
+    }
+    const first = events[0];
+    const rest = events.length - 1;
+    el.innerHTML = `<strong>Up next:</strong> ${escapeHtml(first.title)}${first.time ? ` <span class="muted">${escapeHtml(first.time)}</span>` : ''}${rest > 0 ? ` <span class="muted">(+${rest} more)</span>` : ''}`;
+  } catch {
+    el.innerHTML = '<span class="muted">Calendar is unavailable right now.</span>';
+  }
 }
 
 /* ---------- Settings dispatcher ---------- */
@@ -1304,6 +1474,7 @@ function buildSettingsPane(section, pane, body) {
     youtube: buildYouTubeSettings,
     links: buildLinksSettings,
     ai: buildAiSettings,
+    quicklinks: buildQuickLinksSettings,
   };
   if (builders[section.type]) builders[section.type](section, pane, body);
   else pane.innerHTML = '<div class="empty">No settings for this section.</div>';
@@ -1338,7 +1509,7 @@ function openAddModal() {
         const card = dashboardEl.querySelector(`[data-section-id="${CSS.escape(data.section.id)}"]`);
         if (card) {
           const pane = $('.settings-pane', card);
-          toggleSettingsPane(data.section, pane, $('.card-body', card));
+          toggleSettingsPane(data.section, pane, $('.rename-bar', card), $('.card-body', card));
           card.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       }
@@ -1488,7 +1659,7 @@ function setEditMode(on) {
   document.body.classList.toggle('editing', on);
   const btn = $('#edit-toggle');
   btn.setAttribute('aria-pressed', String(on));
-  btn.textContent = on ? '✓ Done' : '✏️ Edit';
+  btn.textContent = on ? '✓ Done' : '⇄ Rearrange';
   if (!on) closeCardMenu();
 }
 
@@ -1504,11 +1675,13 @@ const RENDERERS = {
   links: renderLinksSection,
   notes: renderNotesSection,
   ai: renderAiSection,
-  quicklaunch: (s, b) => renderQuickLaunch(b),
+  quicklinks: renderQuickLinksSection,
+  myday: renderMyDaySection,
 };
 
 function render() {
   closeCardMenu();
+  if (myDayTimer) { clearInterval(myDayTimer); myDayTimer = 0; }
   renderGreeting();
   dashboardEl.innerHTML = '';
   const vis = visibleSections();
