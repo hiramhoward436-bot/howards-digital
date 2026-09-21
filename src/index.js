@@ -18,7 +18,7 @@ const MAX_SETTINGS_BYTES = 32 * 1024; // 32 KB per section settings object
 const SECTION_TYPES = new Set([
   "greeting", "search", "weather", "sports", "youtube",
   "projects", "files", "links", "notes",
-  "chatgpt", "claude", "grok", "quicklaunch",
+  "ai", "quicklaunch",
 ]);
 
 function randomToken() {
@@ -37,14 +37,22 @@ function parseSettings(raw) {
 }
 
 function sectionRow(row) {
+  const size = String(row.size || "M").toUpperCase();
   return {
     id: row.id,
     type: row.type,
     title: row.title,
     enabled: row.enabled === 1,
     position: row.position,
+    size: ["S", "M", "L"].includes(size) ? size : "M",
     settings: parseSettings(row.settings),
   };
+}
+
+function parseSize(value) {
+  if (value === undefined) return null;
+  const size = String(value).toUpperCase();
+  return ["S", "M", "L"].includes(size) ? size : null;
 }
 
 async function readJsonBody(request) {
@@ -90,7 +98,7 @@ export default {
     if (url.pathname === "/api/sections" && request.method === "GET") {
       if (!env.HD_DB) return json({ sections: [], db: false }, 200, corsHeaders);
       const result = await env.HD_DB.prepare(
-        "SELECT id, type, title, enabled, position, settings FROM sections ORDER BY position ASC, created_at ASC"
+        "SELECT id, type, title, enabled, position, size, settings FROM sections ORDER BY position ASC, created_at ASC"
       ).all();
       return json({ sections: (result.results || []).map(sectionRow), db: true }, 200, corsHeaders);
     }
@@ -101,6 +109,7 @@ export default {
       if (!body || typeof body !== "object") return json({ error: "Invalid request." }, 400, corsHeaders);
       const type = String(body.type || "");
       if (!SECTION_TYPES.has(type)) return json({ error: "Unknown section type." }, 400, corsHeaders);
+      const size = parseSize(body.size) || "M";
       const settingsStr = JSON.stringify(body.settings || {});
       if (settingsStr.length > MAX_SETTINGS_BYTES) {
         return json({ error: "Section settings are too large." }, 413, corsHeaders);
@@ -112,11 +121,11 @@ export default {
         "SELECT COALESCE(MAX(position), -1) + 1 AS nextPos FROM sections"
       ).first();
       await env.HD_DB.prepare(
-        `INSERT INTO sections (id, type, title, enabled, position, settings, created_at, updated_at)
-         VALUES (?, ?, ?, 1, ?, ?, ?, ?)`
-      ).bind(id, type, title, posRow ? posRow.nextPos : 0, settingsStr, now, now).run();
+        `INSERT INTO sections (id, type, title, enabled, position, size, settings, created_at, updated_at)
+         VALUES (?, ?, ?, 1, ?, ?, ?, ?, ?)`
+      ).bind(id, type, title, posRow ? posRow.nextPos : 0, size, settingsStr, now, now).run();
       const row = await env.HD_DB.prepare(
-        "SELECT id, type, title, enabled, position, settings FROM sections WHERE id = ?"
+        "SELECT id, type, title, enabled, position, size, settings FROM sections WHERE id = ?"
       ).bind(id).first();
       return json({ section: sectionRow(row) }, 201, corsHeaders);
     }
@@ -156,6 +165,11 @@ export default {
       const binds = [];
       if (body.title !== undefined) { updates.push("title = ?"); binds.push(String(body.title).slice(0, 120)); }
       if (body.enabled !== undefined) { updates.push("enabled = ?"); binds.push(body.enabled ? 1 : 0); }
+      if (body.size !== undefined) {
+        const size = parseSize(body.size);
+        if (!size) return json({ error: "Invalid size. Use S, M, or L." }, 400, corsHeaders);
+        updates.push("size = ?"); binds.push(size);
+      }
       if (body.settings !== undefined) {
         const settingsStr = JSON.stringify(body.settings || {});
         if (settingsStr.length > MAX_SETTINGS_BYTES) {
@@ -170,7 +184,7 @@ export default {
         await env.HD_DB.prepare(`UPDATE sections SET ${updates.join(", ")} WHERE id = ?`).bind(...binds).run();
       }
       const row = await env.HD_DB.prepare(
-        "SELECT id, type, title, enabled, position, settings FROM sections WHERE id = ?"
+        "SELECT id, type, title, enabled, position, size, settings FROM sections WHERE id = ?"
       ).bind(id).first();
       return json({ section: sectionRow(row) }, 200, corsHeaders);
     }
@@ -314,7 +328,7 @@ function defaultTitleFor(type) {
     greeting: "Welcome", search: "Search", weather: "Weather",
     sports: "My Teams", youtube: "YouTube", projects: "Projects",
     files: "Files", links: "Links", notes: "Notes",
-    chatgpt: "ChatGPT", claude: "Claude", grok: "Grok", quicklaunch: "Quick Launch",
+    ai: "AI", quicklaunch: "Quick Launch",
   }[type] || "Section";
 }
 

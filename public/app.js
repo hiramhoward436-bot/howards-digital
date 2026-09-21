@@ -1,7 +1,11 @@
-/* Howard's Digital — customizable dashboard.
- * The dashboard shell loads first; each section card fetches its own live
- * data independently. Layout, titles, visibility, order, and per-section
- * settings persist in D1 via /api/sections. No fake data: if a service is
+/* Howard's Digital — Phase 1 UI foundation: unified widget system.
+ * Every dashboard section renders as a consistent card on a flexible
+ * 12-column grid (S/M/L sizes). Normal mode shows a subtle ⋯ menu per
+ * card; the header Edit toggle reveals the full edit toolbar (drag,
+ * move, resize, settings, rename, hide, remove). Layout, titles,
+ * visibility, order, sizes, and per-section settings persist in D1 via
+ * /api/sections. Device appearance prefs (TV mode, text size,
+ * background) live in localStorage. No fake data: if a service is
  * unavailable or not configured, the card says so honestly.
  */
 
@@ -41,7 +45,9 @@ function fmtDay(iso) {
   return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 }
 
-/* ---------- Section types ---------- */
+/* ---------- Section types ----------
+ * ONLY types listed here appear in the + Add Section catalog — every one
+ * of them is a real, working widget. Nothing fake, nothing dead. */
 const SECTION_TYPES = {
   greeting: { label: 'Greeting', desc: 'A welcome banner with the time of day.' },
   search:   { label: 'Search', desc: 'A Google search bar.' },
@@ -52,12 +58,19 @@ const SECTION_TYPES = {
   files:    { label: 'Files', desc: 'Upload files and share them with a link.' },
   links:    { label: 'Links', desc: 'Your own list of favorite links.' },
   notes:    { label: 'Notes', desc: 'Quick notes, saved automatically on HD.' },
-  chatgpt:  { label: 'ChatGPT', desc: 'Ask anything — opens the real ChatGPT.' },
-  claude:   { label: 'Claude', desc: 'Open Claude in a new tab.' },
-  grok:     { label: 'Grok', desc: 'Open Grok in a new tab.' },
+  ai:         { label: 'AI', desc: 'Your AI launchers — pick which services appear inside.' },
   quicklaunch: { label: 'Quick Launch', desc: 'A compact row of shortcuts near the top.' },
 };
-const TYPES_WITH_SETTINGS = new Set(['weather', 'sports', 'youtube', 'links', 'notes']);
+const TYPE_GROUPS = [
+  { title: 'Essentials', types: ['greeting', 'search', 'quicklaunch'] },
+  { title: 'Information', types: ['weather', 'sports'] },
+  { title: 'Media', types: ['youtube'] },
+  { title: 'Personal', types: ['projects', 'files', 'links', 'notes'] },
+  { title: 'AI', types: ['ai'] },
+];
+const TYPES_WITH_SETTINGS = new Set(['weather', 'sports', 'youtube', 'links', 'ai']);
+const SIZES = ['S', 'M', 'L'];
+const SIZE_NAMES = { S: 'Small', M: 'Medium', L: 'Large' };
 
 /* ---------- API ---------- */
 async function api(path, method = 'GET', body) {
@@ -90,11 +103,72 @@ function hiddenSections() {
   return sections.filter(s => !s.enabled).sort((a, b) => a.position - b.position);
 }
 
+function sectionSize(section) {
+  const s = String(section.size || 'M').toUpperCase();
+  return SIZES.includes(s) ? s : 'M';
+}
+
 async function saveSection(id, patch) {
   const data = await api(`/api/sections/${encodeURIComponent(id)}`, 'PUT', patch);
   const i = sections.findIndex(s => s.id === id);
   if (i >= 0) sections[i] = data.section;
   return data.section;
+}
+
+/* ---------- Device appearance prefs (localStorage; per device) ---------- */
+const PREFS_KEY = 'hd-prefs-v1';
+let prefs = loadPrefs();
+function loadPrefs() {
+  const fallback = { tvMode: false, fontSize: 'normal', background: 'aurora' };
+  try {
+    return Object.assign(fallback, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'));
+  } catch { return fallback; }
+}
+function storePrefs() {
+  try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* private mode */ }
+}
+function applyPrefs() {
+  document.body.classList.toggle('tv-mode', !!prefs.tvMode);
+  document.body.classList.toggle('font-large', prefs.fontSize === 'large');
+  document.body.classList.remove('bg-solid', 'bg-graphite');
+  if (prefs.background === 'solid') document.body.classList.add('bg-solid');
+  else if (prefs.background === 'graphite') document.body.classList.add('bg-graphite');
+}
+
+/* ---------- Loading / empty / error states ---------- */
+function renderBootSkeletons(count = 6) {
+  dashboardEl.innerHTML = Array.from({ length: count }, () => `
+    <article class="card section-card" aria-hidden="true">
+      <div class="skel-stack">
+        <div class="skeleton" style="height:26px;width:52%"></div>
+        <div class="skeleton" style="height:15px;width:88%"></div>
+        <div class="skeleton" style="height:70px"></div>
+      </div>
+    </article>`).join('');
+}
+
+function showLoading(body, rows = 3) {
+  body.innerHTML = `<div class="skel-stack" aria-label="Loading">${
+    Array.from({ length: rows }, (_, i) =>
+      `<div class="skeleton" style="height:${i === 0 ? 22 : 15}px${i > 1 ? ';width:' + (92 - i * 6) + '%' : ''}"></div>`
+    ).join('')
+  }</div>`;
+}
+
+function showEmpty(body, icon, text, hint) {
+  body.innerHTML = `<div class="empty">
+    <span class="empty-icon" aria-hidden="true">${icon}</span>
+    <div>${escapeHtml(text)}</div>
+    ${hint ? `<small class="muted">${escapeHtml(hint)}</small>` : ''}
+  </div>`;
+}
+
+function showError(body, message, retry) {
+  body.innerHTML = `<div class="error-box" role="alert">
+    <p>${escapeHtml(message)}</p>
+    <button type="button">Retry</button>
+  </div>`;
+  $('button', body).addEventListener('click', retry);
 }
 
 /* ---------- Greeting / header ---------- */
@@ -107,10 +181,13 @@ function renderGreeting() {
   });
 }
 
-/* ---------- Card shell ---------- */
+/* ---------- Unified card shell ----------
+ * Normal mode: title + subtle ⋯ menu. Edit mode (body.editing): the full
+ * toolbar with drag handle, move, resize, settings, rename, hide, remove. */
 function cardShell(section) {
+  const size = sectionSize(section);
   const card = document.createElement('article');
-  card.className = `card section-card section-${escapeHtml(section.type)}`;
+  card.className = `card section-card section-${escapeHtml(section.type)} size-${size.toLowerCase()}`;
   card.dataset.sectionId = section.id;
 
   const head = document.createElement('div');
@@ -118,12 +195,20 @@ function cardShell(section) {
   head.innerHTML = `
     <div class="card-title"><span class="label">${escapeHtml(SECTION_TYPES[section.type]?.label || section.type)}</span>
     <h2>${escapeHtml(section.title)}</h2></div>
-    <div class="card-controls" role="toolbar" aria-label="Section controls">
+    <div class="card-menu-wrap">
+      <button type="button" class="card-menu-btn" aria-haspopup="menu" aria-expanded="false"
+        aria-label="Section menu" title="Section menu">⋯</button>
+      <div class="card-menu" role="menu" hidden></div>
+    </div>
+    <div class="card-controls" role="toolbar" aria-label="Edit section">
       <button type="button" class="drag-handle" title="Drag to reorder" aria-label="Drag to reorder section">⋮⋮</button>
       <button type="button" data-act="up" title="Move up" aria-label="Move section up">▲</button>
       <button type="button" data-act="down" title="Move down" aria-label="Move section down">▼</button>
-      ${TYPES_WITH_SETTINGS.has(section.type) ? '<button type="button" data-act="settings" title="Settings" aria-label="Section settings">⚙</button>' : ''}
+      ${TYPES_WITH_SETTINGS.has(section.type) ? '<button type="button" data-act="settings" title="Edit" aria-label="Edit section">⚙</button>' : ''}
       <button type="button" data-act="rename" title="Rename" aria-label="Rename section">✏️</button>
+      <div class="size-seg" role="group" aria-label="Card size">
+        ${SIZES.map(s => `<button type="button" data-size="${s}" aria-pressed="${s === size}" title="${SIZE_NAMES[s]}">${s}</button>`).join('')}
+      </div>
       <button type="button" data-act="hide" title="Hide" aria-label="Hide section">👁</button>
       <button type="button" data-act="remove" title="Remove" aria-label="Remove section" class="danger">✕</button>
     </div>`;
@@ -136,15 +221,98 @@ function cardShell(section) {
   settingsPane.hidden = true;
 
   card.append(head, settingsPane, body);
-  head.querySelector('.card-controls').addEventListener('click', (e) => onCardControl(e, section, settingsPane, body));
+
+  const menuBtn = $('.card-menu-btn', head);
+  const menu = $('.card-menu', head);
+  menuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleCardMenu(section, menuBtn, menu, settingsPane, body);
+  });
+
+  head.querySelector('.card-controls').addEventListener('click', (e) => {
+    const sizeBtn = e.target.closest('[data-size]');
+    if (sizeBtn) { e.stopPropagation(); setSectionSize(section.id, sizeBtn.dataset.size); return; }
+    onCardControl(e, section, settingsPane, body);
+  });
   return { card, body, settingsPane };
 }
 
-async function onCardControl(event, section, settingsPane, body) {
-  const btn = event.target.closest('[data-act]');
-  if (!btn) return;
-  event.stopPropagation();
-  const act = btn.dataset.act;
+function sizeSegHtml(size) {
+  return SIZES.map(s =>
+    `<button type="button" data-msize="${s}" aria-pressed="${s === size}" title="${SIZE_NAMES[s]}">${s}</button>`
+  ).join('');
+}
+
+function buildCardMenu(section, menu, settingsPane, body) {
+  const size = sectionSize(section);
+  const hasSettings = TYPES_WITH_SETTINGS.has(section.type);
+  menu.innerHTML = `
+    ${hasSettings ? `<button type="button" class="card-menu-item" role="menuitem" data-m="edit"><span class="mi">⚙</span>Edit</button>` : ''}
+    <button type="button" class="card-menu-item" role="menuitem" data-m="up"><span class="mi">▲</span>Move up</button>
+    <button type="button" class="card-menu-item" role="menuitem" data-m="down"><span class="mi">▼</span>Move down</button>
+    <div class="card-menu-sep"></div>
+    <div class="card-menu-size"><span class="mi" aria-hidden="true">↔</span>
+      <div class="size-seg" role="group" aria-label="Card size">${sizeSegHtml(size)}</div>
+    </div>
+    <div class="card-menu-sep"></div>
+    <button type="button" class="card-menu-item" role="menuitem" data-m="hide"><span class="mi">👁</span>Hide</button>
+    <button type="button" class="card-menu-item danger" role="menuitem" data-m="remove"><span class="mi">✕</span>Remove</button>`;
+  menu.querySelectorAll('[data-m]').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeCardMenu();
+    sectionAction(section, btn.dataset.m, settingsPane, body);
+  }));
+  menu.querySelectorAll('[data-msize]').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeCardMenu();
+    setSectionSize(section.id, btn.dataset.msize);
+  }));
+}
+
+let openMenu = null;
+function closeCardMenu() {
+  if (openMenu) {
+    openMenu.menu.hidden = true;
+    openMenu.btn.setAttribute('aria-expanded', 'false');
+    openMenu = null;
+    document.removeEventListener('click', closeCardMenu);
+  }
+}
+
+function toggleCardMenu(section, btn, menu, settingsPane, body) {
+  if (openMenu && openMenu.menu === menu) { closeCardMenu(); return; }
+  closeCardMenu();
+  buildCardMenu(section, menu, settingsPane, body);
+  menu.hidden = false;
+  btn.setAttribute('aria-expanded', 'true');
+  openMenu = { btn, menu };
+  // Defer so this same click doesn't immediately close it.
+  setTimeout(() => document.addEventListener('click', closeCardMenu), 0);
+}
+
+function toggleSettingsPane(section, settingsPane, body) {
+  settingsPane.hidden = !settingsPane.hidden;
+  if (!settingsPane.hidden && !settingsPane.dataset.built) {
+    settingsPane.dataset.built = '1';
+    buildSettingsPane(section, settingsPane, body);
+  }
+}
+
+async function setSectionSize(id, size) {
+  if (!SIZES.includes(size)) return;
+  try {
+    await saveSection(id, { size });
+    const card = dashboardEl.querySelector(`[data-section-id="${CSS.escape(id)}"]`);
+    if (card) {
+      card.classList.remove('size-s', 'size-m', 'size-l');
+      card.classList.add(`size-${size.toLowerCase()}`);
+    }
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function sectionAction(section, act, settingsPane, body) {
   try {
     if (act === 'remove') {
       if (!confirm(`Remove "${section.title}" from your dashboard?`)) return;
@@ -162,16 +330,19 @@ async function onCardControl(event, section, settingsPane, body) {
       }
     } else if (act === 'up' || act === 'down') {
       moveSection(section.id, act === 'up' ? -1 : 1);
-    } else if (act === 'settings') {
-      settingsPane.hidden = !settingsPane.hidden;
-      if (!settingsPane.hidden && !settingsPane.dataset.built) {
-        settingsPane.dataset.built = '1';
-        buildSettingsPane(section, settingsPane, body);
-      }
+    } else if (act === 'edit' || act === 'settings') {
+      toggleSettingsPane(section, settingsPane, body);
     }
   } catch (err) {
     alert(err.message);
   }
+}
+
+async function onCardControl(event, section, settingsPane, body) {
+  const btn = event.target.closest('[data-act]');
+  if (!btn) return;
+  event.stopPropagation();
+  sectionAction(section, btn.dataset.act, settingsPane, body);
 }
 
 async function moveSection(id, dir) {
@@ -195,9 +366,9 @@ async function moveSection(id, dir) {
 }
 
 /* ---------- Drag to reorder (pointer-based: mouse + touch, no library) ----------
- * A ⋮⋮ handle sits first in each card's controls. Desktop: press and drag.
- * Touch: press-and-hold the handle (~350ms), then drag. A dashed indicator
- * shows the drop spot. On drop the order persists through the same
+ * In Edit mode a ⋮⋮ handle sits first in each card's toolbar. Desktop: press
+ * and drag. Touch: press-and-hold the handle (~350ms), then drag. A dashed
+ * indicator shows the drop spot. On drop the order persists through the same
  * /api/sections/reorder endpoint the Move Up/Down buttons use.
  * The buttons stay as the reliable path for TV remotes / air mice. */
 
@@ -379,7 +550,7 @@ function renderSearchSection(body) {
 }
 
 async function renderProjectsSection(body) {
-  body.innerHTML = '<div class="empty">Loading projects…</div>';
+  showLoading(body, 4);
   try {
     const data = await api('/api/projects');
     const projects = data.projects || [];
@@ -388,9 +559,11 @@ async function renderProjectsSection(body) {
         <div class="project">
           <div><strong>${escapeHtml(p.name)}</strong><br><small>${escapeHtml(p.description || 'No description')}</small></div>
           <small>${escapeHtml(p.status)}</small>
-        </div>`).join('')}</div>` : '<div class="empty">No projects yet.</div>';
+        </div>`).join('')}</div>`
+      : '';
+    if (!projects.length) showEmpty(body, '🗂️', 'No projects yet.');
   } catch {
-    body.innerHTML = '<div class="empty">Projects are unavailable right now.</div>';
+    showError(body, 'Projects are unavailable right now.', () => renderProjectsSection(body));
   }
 }
 
@@ -422,7 +595,7 @@ function weatherUrl(lat, lon) {
 }
 
 async function renderWeatherSection(section, body) {
-  body.innerHTML = '<div class="empty">Loading weather…</div>';
+  showLoading(body, 4);
   const s = section.settings || {};
   let lat = Number(s.lat), lon = Number(s.lon), label = s.location || '';
 
@@ -439,7 +612,9 @@ async function renderWeatherSection(section, body) {
   if (!isFinite(lat) || !isFinite(lon)) { lat = 38.04; lon = -84.50; label = label || 'Lexington, KY'; }
 
   try {
-    const data = await (await fetch(weatherUrl(lat, lon))).json();
+    const resp = await fetch(weatherUrl(lat, lon));
+    if (!resp.ok) throw new Error(`weather HTTP ${resp.status}`);
+    const data = await resp.json();
     const cur = data.current || {};
     const code = cur.weather_code;
     const hi = Math.round(data.daily.temperature_2m_max[0]);
@@ -474,7 +649,7 @@ async function renderWeatherSection(section, body) {
     const fc = $('.wx-forecast', body);
     main.addEventListener('click', () => { fc.hidden = !fc.hidden; });
   } catch {
-    body.innerHTML = '<div class="empty">Weather is temporarily unavailable.</div>';
+    showError(body, 'Weather is temporarily unavailable.', () => renderWeatherSection(section, body));
   }
 }
 
@@ -536,10 +711,10 @@ function scheduleUrl(sport, teamId) {
 async function renderSportsSection(section, body) {
   const teams = (section.settings && section.settings.teams) || [];
   if (!teams.length) {
-    body.innerHTML = '<div class="empty">No teams yet — tap ⚙ to follow a team.</div>';
+    showEmpty(body, '🏈', 'No teams yet.', 'Open the section menu (⋯) → Edit to follow a team.');
     return;
   }
-  body.innerHTML = '<div class="empty">Loading scores…</div>';
+  showLoading(body, 4);
   const blocks = await Promise.all(teams.map(async (t, i) => {
     try {
       const info = await espnTeamInfo(t.sport, t.teamId);
@@ -549,6 +724,10 @@ async function renderSportsSection(section, body) {
       return { i, t, ok: false };
     }
   }));
+  if (blocks.every(b => !b.ok)) {
+    showError(body, 'Scores are temporarily unavailable.', () => renderSportsSection(section, body));
+    return;
+  }
   body.innerHTML = blocks.map(b => {
     if (!b.ok) return `<div class="team-block"><strong>${escapeHtml(b.t.label)}</strong><p class="muted">Scores are temporarily unavailable.</p></div>`;
     const n = b.info.next;
@@ -664,11 +843,10 @@ function extractChannelId(input) {
 async function renderYouTubeSection(section, body) {
   const channels = (section.settings && section.settings.channels) || [];
   if (!channels.length) {
-    body.innerHTML = `<div class="empty">No channels yet — tap ⚙ to add one.<br>
-      <small class="muted">YouTube sign-in is coming later; for now add channels by URL or channel ID.</small></div>`;
+    showEmpty(body, '📺', 'No channels yet.', 'Open the section menu (⋯) → Edit to add one. YouTube sign-in is coming later.');
     return;
   }
-  body.innerHTML = '<div class="empty">Loading videos…</div>';
+  showLoading(body, 4);
   const results = await Promise.all(channels.map(async (ch) => {
     try {
       const d = await (await fetch(`/api/youtube/rss?channel_id=${encodeURIComponent(ch.channelId)}`)).json();
@@ -678,6 +856,10 @@ async function renderYouTubeSection(section, body) {
       return { ch, ok: false };
     }
   }));
+  if (results.every(r => !r.ok)) {
+    showError(body, "Couldn't load these channels right now.", () => renderYouTubeSection(section, body));
+    return;
+  }
   body.innerHTML = results.map((r, i) => `
     <div class="yt-channel">
       <button type="button" class="yt-head" data-yt="${i}">
@@ -771,7 +953,7 @@ async function renderFilesSection(section, body) {
       <button type="submit">Upload</button>
     </form>
     <p class="upload-status muted"></p>
-    <div class="file-list"><div class="empty">Loading files…</div></div>`;
+    <div class="file-list"></div>`;
 
   const form = $('form', body);
   const input = $('input[type=file]', body);
@@ -779,10 +961,12 @@ async function renderFilesSection(section, body) {
   const list = $('.file-list', body);
 
   async function loadFiles() {
+    showLoading(list, 3);
     try {
       const data = await api('/api/files');
       const files = data.files || [];
-      list.innerHTML = files.length ? files.map(f => `
+      if (!files.length) { showEmpty(list, '📁', 'No files yet.', 'Upload one above — the share link is copied automatically.'); return; }
+      list.innerHTML = files.map(f => `
         <div class="file-row">
           <div><strong>${escapeHtml(f.filename)}</strong><br><small>${fmtSize(f.size)} • ${escapeHtml(new Date(f.created_at).toLocaleDateString())}</small></div>
           <div class="file-actions">
@@ -790,9 +974,9 @@ async function renderFilesSection(section, body) {
             ${f.url ? `<button type="button" data-copy="${escapeHtml(f.url)}">Copy link</button>` : ''}
             <button type="button" data-del="${escapeHtml(f.id)}" class="danger">Delete</button>
           </div>
-        </div>`).join('') : '<div class="empty">No files yet.</div>';
+        </div>`).join('');
     } catch {
-      list.innerHTML = '<div class="empty">Files are unavailable right now.</div>';
+      showError(list, 'Files are unavailable right now.', loadFiles);
     }
   }
 
@@ -844,12 +1028,15 @@ async function renderFilesSection(section, body) {
 /* ---------- Links ---------- */
 function renderLinksSection(section, body) {
   const links = (section.settings && section.settings.links) || [];
-  body.innerHTML = links.length ? `
+  if (!links.length) {
+    showEmpty(body, '🔗', 'No links yet.', 'Open the section menu (⋯) → Edit to add some.');
+    return;
+  }
+  body.innerHTML = `
     <div class="link-list">${links.map(l => `
       <a class="listen-link" href="${escapeHtml(l.url)}" target="_blank" rel="noopener">
         <strong>${escapeHtml(l.title)}</strong><span>${escapeHtml(l.subtitle || '')}</span>
-      </a>`).join('')}</div>`
-    : '<div class="empty">No links yet — tap ⚙ to add some.</div>';
+      </a>`).join('')}</div>`;
 }
 
 function buildLinksSettings(section, pane, body) {
@@ -915,22 +1102,171 @@ function renderNotesSection(section, body) {
   });
 }
 
-/* ---------- AI launchers + Quick Launch (real services, no fake AI) ---------- */
-const AI_SITES = {
-  chatgpt: { name: 'ChatGPT', url: 'https://chatgpt.com', cta: 'Ask anything.' },
-  claude:  { name: 'Claude',  url: 'https://claude.ai',   cta: 'Start a conversation.' },
-  grok:    { name: 'Grok',    url: 'https://grok.com',     cta: 'Ask Grok anything.' },
+/* ---------- AI widget + Quick Launch (real services, no fake AI) ----------
+ * One "AI" widget holds the user's picked services. The selection, order,
+ * and default live in the section's settings ({services:[{id,name,url}],
+ * defaultId}) and persist through the normal sections API. The catalog below
+ * is the picker source; adding an entry here makes a new service pickable. */
+const AI_CATALOG = {
+  chatgpt: { name: 'ChatGPT', url: 'https://chatgpt.com' },
+  claude:  { name: 'Claude',  url: 'https://claude.ai' },
+  grok:    { name: 'Grok',    url: 'https://grok.com' },
+  gemini:  { name: 'Gemini',  url: 'https://gemini.google.com' },
 };
+const AI_CATALOG_ORDER = ['chatgpt', 'claude', 'grok', 'gemini'];
 
-function renderAiLauncher(body, type) {
-  const site = AI_SITES[type];
-  if (!site) { body.innerHTML = '<div class="empty">This launcher is unavailable.</div>'; return; }
+function aiConfig(settings) {
+  const s = (settings && typeof settings === 'object') ? settings : {};
+  const services = [];
+  const seen = new Set();
+  for (const raw of (Array.isArray(s.services) ? s.services : [])) {
+    if (!raw || typeof raw !== 'object') continue;
+    const id = String(raw.id || '').trim();
+    const url = String(raw.url || '').trim();
+    const name = String(raw.name || '').trim();
+    if (!id || !url || !/^https:\/\//i.test(url) || seen.has(id)) continue;
+    seen.add(id);
+    services.push({ id, name: name || id, url });
+  }
+  const defaultId = services.some(x => x.id === s.defaultId) ? s.defaultId
+    : (services.length ? services[0].id : '');
+  return { services, defaultId };
+}
+
+function renderAiSection(section, body) {
+  const cfg = aiConfig(section.settings);
+  if (!cfg.services.length) {
+    showEmpty(body, '🤖', 'No AI services selected yet.',
+      'Use the ⋯ menu → Edit to pick which AIs appear here.');
+    return;
+  }
+  const byId = new Map(cfg.services.map(s => [s.id, s]));
+  let current = byId.get(cfg.defaultId) || cfg.services[0];
   body.innerHTML = `
-    <div class="ai-launcher">
-      <p class="ai-cta">${escapeHtml(site.cta)}</p>
-      <a class="ai-open" href="${site.url}" target="_blank" rel="noopener">Open ${escapeHtml(site.name)} ↗</a>
-      <p class="muted">Opens the real ${escapeHtml(site.name)} in a new tab — your own account, nothing faked.</p>
+    <div class="ai-widget">
+      <p class="ai-cta">Ask anything.</p>
+      <div class="ai-chips" role="group" aria-label="Choose an AI service">
+        ${cfg.services.map(s => `<button type="button" class="ai-chip${s.id === current.id ? ' active' : ''}"
+          data-ai="${escapeHtml(s.id)}" aria-pressed="${s.id === current.id}">${escapeHtml(s.name)}</button>`).join('')}
+      </div>
+      <a class="ai-open" data-ai-open href="${escapeHtml(current.url)}" target="_blank" rel="noopener">Open ${escapeHtml(current.name)} ↗</a>
+      <p class="muted">Opens the real ${escapeHtml(current.name)} in a new tab — your own account, nothing faked.</p>
     </div>`;
+  const openBtn = body.querySelector('[data-ai-open]');
+  const muted = body.querySelector('.ai-widget .muted');
+  body.querySelectorAll('.ai-chip').forEach(chip => chip.addEventListener('click', () => {
+    const svc = byId.get(chip.dataset.ai);
+    if (!svc) return;
+    current = svc;
+    body.querySelectorAll('.ai-chip').forEach(c => {
+      const on = c.dataset.ai === svc.id;
+      c.classList.toggle('active', on);
+      c.setAttribute('aria-pressed', String(on));
+    });
+    openBtn.href = svc.url;
+    openBtn.textContent = `Open ${svc.name} ↗`;
+    muted.textContent = `Opens the real ${svc.name} in a new tab — your own account, nothing faked.`;
+  }));
+}
+
+/* Edit pane for the AI widget: tick services, reorder, pick a default, add a custom one. */
+function buildAiSettings(section, pane, body) {
+  const render = () => {
+    const cfg = aiConfig(getSection(section.id).settings);
+    const inWidget = new Set(cfg.services.map(s => s.id));
+    const catalogIds = [...AI_CATALOG_ORDER,
+      ...cfg.services.filter(s => !AI_CATALOG[s.id]).map(s => s.id)];
+    pane.innerHTML = `
+      <div class="set-group">
+        <h3>AI services</h3>
+        <p class="muted">Tick the ones you want inside this widget.</p>
+        <div class="ai-pick">${catalogIds.map(id => {
+          const known = AI_CATALOG[id] || cfg.services.find(s => s.id === id) || { name: id, url: '' };
+          const on = inWidget.has(id);
+          return `<label class="ai-pick-row">
+            <input type="checkbox" data-ai-pick="${escapeHtml(id)}"${on ? ' checked' : ''}>
+            <span class="ai-pick-name">${escapeHtml(known.name)}</span>
+            <span class="muted">${escapeHtml(known.url)}</span>
+          </label>`;
+        }).join('')}</div>
+      </div>
+      <div class="set-group">
+        <h3>Order &amp; default</h3>
+        <div class="settings-list">${cfg.services.map((s, i) => `
+          <div class="settings-row">
+            <span class="link-fields"><strong>${escapeHtml(s.name)}</strong></span>
+            <button type="button" data-ai-up="${i}"${i === 0 ? ' disabled' : ''} aria-label="Move ${escapeHtml(s.name)} up">▲</button>
+            <button type="button" data-ai-down="${i}"${i === cfg.services.length - 1 ? ' disabled' : ''} aria-label="Move ${escapeHtml(s.name)} down">▼</button>
+          </div>`).join('') || '<p class="muted">Nothing selected yet — tick a service above.</p>'}</div>
+        ${cfg.services.length ? `
+        <div class="form-row" style="margin-top:10px">
+          <label>Default AI
+            <select id="ai-default">${cfg.services.map(s =>
+              `<option value="${escapeHtml(s.id)}"${s.id === cfg.defaultId ? ' selected' : ''}>${escapeHtml(s.name)}</option>`).join('')}</select>
+          </label>
+        </div>` : ''}
+      </div>
+      <div class="set-group">
+        <h3>Add your own</h3>
+        <div class="form-row">
+          <input id="ai-custom-name" placeholder="Name (e.g. Perplexity)" aria-label="Custom AI name">
+          <input id="ai-custom-url" placeholder="https://…" aria-label="Custom AI address" inputmode="url">
+          <button type="button" id="ai-custom-add">Add</button>
+        </div>
+        <p class="muted ai-add-hint" aria-live="polite"></p>
+      </div>`;
+
+    const resync = async (next) => {
+      await saveSection(section.id, { settings: next });
+      const fresh = getSection(section.id);
+      renderAiSection(fresh, body);
+      render();
+    };
+
+    pane.querySelectorAll('[data-ai-pick]').forEach(cb => cb.addEventListener('change', async () => {
+      const id = cb.dataset.aiPick;
+      const cur = aiConfig(getSection(section.id).settings);
+      let services;
+      if (cb.checked) {
+        const entry = AI_CATALOG[id] || cur.services.find(s => s.id === id);
+        if (!entry) return;
+        services = [...cur.services, { id, name: entry.name, url: entry.url }];
+      } else {
+        services = cur.services.filter(s => s.id !== id);
+      }
+      await resync({ services, defaultId: cur.defaultId });
+    }));
+
+    const move = (i, dir) => async () => {
+      const cur = aiConfig(getSection(section.id).settings);
+      const j = i + dir;
+      if (j < 0 || j >= cur.services.length) return;
+      const services = [...cur.services];
+      [services[i], services[j]] = [services[j], services[i]];
+      await resync({ services, defaultId: cur.defaultId });
+    };
+    pane.querySelectorAll('[data-ai-up]').forEach(b => b.addEventListener('click', move(Number(b.dataset.aiUp), -1)));
+    pane.querySelectorAll('[data-ai-down]').forEach(b => b.addEventListener('click', move(Number(b.dataset.aiDown), 1)));
+
+    const defSel = $('#ai-default', pane);
+    if (defSel) defSel.addEventListener('change', async (e) => {
+      const cur = aiConfig(getSection(section.id).settings);
+      await saveSection(section.id, { settings: { services: cur.services, defaultId: e.target.value } });
+      renderAiSection(getSection(section.id), body);
+    });
+
+    $('#ai-custom-add', pane).addEventListener('click', async () => {
+      const name = $('#ai-custom-name', pane).value.trim();
+      const url = $('#ai-custom-url', pane).value.trim();
+      const hint = $('.ai-add-hint', pane);
+      if (!name) { hint.textContent = 'Give it a name first.'; return; }
+      if (!/^https:\/\//i.test(url)) { hint.textContent = 'The address needs to start with https://'; return; }
+      const cur = aiConfig(getSection(section.id).settings);
+      const id = 'custom-' + Date.now().toString(36);
+      await resync({ services: [...cur.services, { id, name, url }], defaultId: cur.defaultId });
+    });
+  };
+  render();
 }
 
 function renderQuickLaunch(body) {
@@ -941,9 +1277,9 @@ function renderQuickLaunch(body) {
   // otherwise fall back to the Projects card; omit the button if neither exists.
   const chaseCard = cards.find(c => /chase/i.test(c.querySelector('.card-title h2')?.textContent || ''));
   const items = [
-    { label: 'ChatGPT', href: AI_SITES.chatgpt.url, external: true },
-    { label: 'Claude', href: AI_SITES.claude.url, external: true },
-    { label: 'Grok', href: AI_SITES.grok.url, external: true },
+    { label: 'ChatGPT', href: AI_CATALOG.chatgpt.url, external: true },
+    { label: 'Claude', href: AI_CATALOG.claude.url, external: true },
+    { label: 'Grok', href: AI_CATALOG.grok.url, external: true },
   ];
   if (cardForType('files')) items.push({ label: 'Files', action: () => scrollInto(cardForType('files')) });
   if (chaseCard || cardForType('projects')) {
@@ -967,26 +1303,45 @@ function buildSettingsPane(section, pane, body) {
     sports: buildSportsSettings,
     youtube: buildYouTubeSettings,
     links: buildLinksSettings,
+    ai: buildAiSettings,
   };
   if (builders[section.type]) builders[section.type](section, pane, body);
   else pane.innerHTML = '<div class="empty">No settings for this section.</div>';
 }
 
-/* ---------- Add Section modal ---------- */
+/* ---------- Add Section (grouped catalog, only real widgets) ---------- */
 function openAddModal() {
   const modal = $('#add-modal');
   const picker = $('#type-picker');
-  picker.innerHTML = Object.entries(SECTION_TYPES).map(([type, meta]) => `
-    <button type="button" class="type-card" data-type="${escapeHtml(type)}">
-      <strong>${escapeHtml(meta.label)}</strong><span>${escapeHtml(meta.desc)}</span>
-    </button>`).join('');
+  picker.innerHTML = TYPE_GROUPS.map(group => `
+    <div class="type-group">
+      <p class="type-group-title">${escapeHtml(group.title)}</p>
+      <div class="type-picker">
+        ${group.types.map(type => {
+          const meta = SECTION_TYPES[type];
+          return `<button type="button" class="type-card" data-type="${escapeHtml(type)}">
+            <strong>${escapeHtml(meta.label)}</strong><span>${escapeHtml(meta.desc)}</span>
+          </button>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
   picker.querySelectorAll('[data-type]').forEach(btn => btn.addEventListener('click', async () => {
     btn.disabled = true;
+    const type = btn.dataset.type;
     try {
-      const data = await api('/api/sections', 'POST', { type: btn.dataset.type });
+      const data = await api('/api/sections', 'POST', { type });
       sections.push(data.section);
       closeAddModal();
       render();
+      // Widgets that need configuration open their settings right away.
+      if (TYPES_WITH_SETTINGS.has(type)) {
+        const card = dashboardEl.querySelector(`[data-section-id="${CSS.escape(data.section.id)}"]`);
+        if (card) {
+          const pane = $('.settings-pane', card);
+          toggleSettingsPane(data.section, pane, $('.card-body', card));
+          card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
     } catch (err) {
       alert(err.message);
       btn.disabled = false;
@@ -995,6 +1350,147 @@ function openAddModal() {
   modal.hidden = false;
 }
 function closeAddModal() { $('#add-modal').hidden = true; }
+
+/* ---------- Settings center ----------
+ * One coherent place for dashboard-wide settings. Categories are data, so
+ * Accounts / Notifications / Data can slot in later without restructuring. */
+const SETTING_CATS = [
+  { id: 'dashboard', label: 'Dashboard', icon: '🧭' },
+  { id: 'appearance', label: 'Appearance', icon: '🎨' },
+  { id: 'accounts', label: 'Accounts', icon: '🔑', soon: true },
+  { id: 'notifications', label: 'Notifications', icon: '🔔', soon: true },
+  { id: 'data', label: 'Data', icon: '💾', soon: true },
+];
+let settingsCat = 'dashboard';
+
+function openSettings() {
+  settingsCat = 'dashboard';
+  renderSettingsNav();
+  renderSettingsContent();
+  $('#settings-modal').hidden = false;
+}
+function closeSettings() { $('#settings-modal').hidden = true; }
+
+function renderSettingsNav() {
+  const nav = $('#settings-nav');
+  nav.innerHTML = SETTING_CATS.map(c => `
+    <button type="button" data-cat="${c.id}" ${c.soon ? 'disabled' : ''}
+      ${c.id === settingsCat ? 'aria-current="true"' : ''}
+      aria-label="${escapeHtml(c.label)}${c.soon ? ' (coming later)' : ''}">
+      <span>${c.icon} ${escapeHtml(c.label)}</span>
+      ${c.soon ? '<span class="soon">Later</span>' : ''}
+    </button>`).join('');
+  nav.querySelectorAll('[data-cat]').forEach(btn => btn.addEventListener('click', () => {
+    settingsCat = btn.dataset.cat;
+    renderSettingsNav();
+    renderSettingsContent();
+  }));
+}
+
+function renderSettingsContent() {
+  const el = $('#settings-content');
+  if (settingsCat === 'dashboard') renderSettingsDashboard(el);
+  else if (settingsCat === 'appearance') renderSettingsAppearance(el);
+}
+
+function renderSettingsDashboard(el) {
+  const ordered = sections.slice().sort((a, b) => a.position - b.position);
+  el.innerHTML = `
+    <h3>Dashboard</h3>
+    <p class="muted" style="margin:0">Reorder and show or hide your sections. Changes save right away.</p>
+    <div class="order-list">
+      ${ordered.map(s => `
+        <div class="order-row ${s.enabled ? '' : 'is-hidden'}">
+          <div class="ord-title"><strong>${escapeHtml(s.title)}</strong><br>
+            <small>${escapeHtml(SECTION_TYPES[s.type]?.label || s.type)} • ${SIZE_NAMES[sectionSize(s)]}${s.enabled ? '' : ' • hidden'}</small></div>
+          <button type="button" data-ord="up" data-id="${escapeHtml(s.id)}" aria-label="Move ${escapeHtml(s.title)} up">▲</button>
+          <button type="button" data-ord="down" data-id="${escapeHtml(s.id)}" aria-label="Move ${escapeHtml(s.title)} down">▼</button>
+          <button type="button" data-ord="toggle" data-id="${escapeHtml(s.id)}">${s.enabled ? 'Hide' : 'Show'}</button>
+        </div>`).join('') || '<div class="empty">No sections yet.</div>'}
+    </div>
+    <div class="form-row">
+      <button type="button" id="show-all-sections">Show all hidden sections</button>
+    </div>`;
+  el.querySelectorAll('[data-ord]').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.dataset.id;
+    const ord = btn.dataset.ord;
+    try {
+      if (ord === 'toggle') {
+        const s = getSection(id);
+        await saveSection(id, { enabled: !s.enabled });
+      } else {
+        await moveSectionSilent(id, ord === 'up' ? -1 : 1);
+      }
+      renderSettingsDashboard(el);
+      render();
+    } catch (err) { alert(err.message); }
+  }));
+  $('#show-all-sections', el).addEventListener('click', async () => {
+    try {
+      await Promise.all(hiddenSections().map(s => saveSection(s.id, { enabled: true })));
+      renderSettingsDashboard(el);
+      render();
+    } catch (err) { alert(err.message); }
+  });
+}
+
+async function moveSectionSilent(id, dir) {
+  const ordered = sections.slice().sort((a, b) => a.position - b.position);
+  const idx = ordered.findIndex(s => s.id === id);
+  const swapWith = idx + dir;
+  if (idx < 0 || swapWith < 0 || swapWith >= ordered.length) return;
+  [ordered[idx], ordered[swapWith]] = [ordered[swapWith], ordered[idx]];
+  await api('/api/sections/reorder', 'PUT', { order: ordered.map(s => s.id) });
+  ordered.forEach((s, i) => { s.position = i; });
+  sections = ordered;
+}
+
+function renderSettingsAppearance(el) {
+  el.innerHTML = `
+    <h3>Appearance</h3>
+    <p class="muted" style="margin:0">These are saved on this device.</p>
+    <div class="pref-row">
+      <div><strong>Theme</strong><br><small>Black / Silver — the Howard's Digital look</small></div>
+      <span class="label" style="border:1px solid rgba(199,206,219,.3);border-radius:999px;padding:8px 16px">Current</span>
+    </div>
+    <div class="pref-row">
+      <div><strong>TV mode</strong><br><small>Bigger text and targets, fewer columns, stronger focus — for the big screen</small></div>
+      <label class="switch"><input type="checkbox" id="pref-tv" ${prefs.tvMode ? 'checked' : ''} aria-label="TV mode"><span class="track"></span></label>
+    </div>
+    <div class="pref-row">
+      <div><strong>Text size</strong><br><small>Normal or Large</small></div>
+      <select id="pref-font" aria-label="Text size">
+        <option value="normal" ${prefs.fontSize !== 'large' ? 'selected' : ''}>Normal</option>
+        <option value="large" ${prefs.fontSize === 'large' ? 'selected' : ''}>Large</option>
+      </select>
+    </div>
+    <div class="pref-row">
+      <div><strong>Background</strong><br><small>The page backdrop behind your cards</small></div>
+      <select id="pref-bg" aria-label="Background">
+        <option value="aurora" ${prefs.background === 'aurora' ? 'selected' : ''}>Aurora (default)</option>
+        <option value="solid" ${prefs.background === 'solid' ? 'selected' : ''}>Solid black</option>
+        <option value="graphite" ${prefs.background === 'graphite' ? 'selected' : ''}>Graphite</option>
+      </select>
+    </div>`;
+  $('#pref-tv', el).addEventListener('change', (e) => {
+    prefs.tvMode = e.target.checked; storePrefs(); applyPrefs();
+  });
+  $('#pref-font', el).addEventListener('change', (e) => {
+    prefs.fontSize = e.target.value; storePrefs(); applyPrefs();
+  });
+  $('#pref-bg', el).addEventListener('change', (e) => {
+    prefs.background = e.target.value; storePrefs(); applyPrefs();
+  });
+}
+
+/* ---------- Edit mode ---------- */
+function setEditMode(on) {
+  document.body.classList.toggle('editing', on);
+  const btn = $('#edit-toggle');
+  btn.setAttribute('aria-pressed', String(on));
+  btn.textContent = on ? '✓ Done' : '✏️ Edit';
+  if (!on) closeCardMenu();
+}
 
 /* ---------- Render ---------- */
 const RENDERERS = {
@@ -1007,18 +1503,17 @@ const RENDERERS = {
   files: renderFilesSection,
   links: renderLinksSection,
   notes: renderNotesSection,
-  chatgpt: (s, b) => renderAiLauncher(b, 'chatgpt'),
-  claude: (s, b) => renderAiLauncher(b, 'claude'),
-  grok: (s, b) => renderAiLauncher(b, 'grok'),
+  ai: renderAiSection,
   quicklaunch: (s, b) => renderQuickLaunch(b),
 };
 
 function render() {
+  closeCardMenu();
   renderGreeting();
   dashboardEl.innerHTML = '';
   const vis = visibleSections();
   if (!vis.length) {
-    dashboardEl.innerHTML = '<div class="empty">Your dashboard is empty — tap ＋ Add Section to build it.</div>';
+    showEmpty(dashboardEl, '🏠', 'Your dashboard is empty.', 'Tap ＋ Add Section to build it.');
   }
   for (const section of vis) {
     const { card, body, settingsPane } = cardShell(section);
@@ -1026,7 +1521,9 @@ function render() {
     try {
       RENDERERS[section.type](section, body);
     } catch {
-      body.innerHTML = '<div class="empty">This section had trouble loading.</div>';
+      showError(body, 'This section had trouble loading.', () => {
+        try { RENDERERS[section.type](section, body); } catch { /* stays in error state */ }
+      });
     }
   }
   // Hidden sections strip
@@ -1043,12 +1540,25 @@ function render() {
 
 /* ---------- Boot ---------- */
 async function boot() {
+  applyPrefs();
   renderGreeting();
   enableSectionDrag();
+  renderBootSkeletons();
+
   $('#add-section-btn').addEventListener('click', openAddModal);
   $('#add-modal-close').addEventListener('click', closeAddModal);
   $('#add-modal').addEventListener('click', (e) => { if (e.target.id === 'add-modal') closeAddModal(); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAddModal(); });
+  $('#edit-toggle').addEventListener('click', () => setEditMode(!document.body.classList.contains('editing')));
+  $('#settings-btn').addEventListener('click', openSettings);
+  $('#settings-close').addEventListener('click', closeSettings);
+  $('#settings-modal').addEventListener('click', (e) => { if (e.target.id === 'settings-modal') closeSettings(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (!$('#settings-modal').hidden) closeSettings();
+      else if (!$('#add-modal').hidden) closeAddModal();
+      else closeCardMenu();
+    }
+  });
 
   try {
     const data = await api('/api/sections');

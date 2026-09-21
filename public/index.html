@@ -10,7 +10,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Howard's Digital">
-  <link rel="apple-touch-icon" href="/logo.jpg">
+  <link rel="icon" type="image/svg+xml" href="/hd-icon.svg">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -23,6 +24,8 @@
       </div>
       <div class="topbar-actions">
         <span id="status" class="status">Connecting…</span>
+        <button type="button" id="edit-toggle" class="big-btn ghost-btn" aria-pressed="false">✏️ Edit</button>
+        <button type="button" id="settings-btn" class="big-btn ghost-btn" aria-label="Open settings">⚙ Settings</button>
         <button type="button" id="add-section-btn" class="big-btn">＋ Add Section</button>
       </div>
     </header>
@@ -45,6 +48,19 @@
       </div>
       <p class="muted">Pick what to add to your dashboard. You can rename, reorder, hide, or remove it later.</p>
       <div id="type-picker" class="type-picker"></div>
+    </div>
+  </div>
+
+  <div id="settings-modal" class="modal-backdrop" hidden>
+    <div class="modal settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="modal-head">
+        <h2 id="settings-title">Settings</h2>
+        <button type="button" id="settings-close" aria-label="Close settings">✕</button>
+      </div>
+      <div class="settings-layout">
+        <nav class="settings-nav" id="settings-nav" aria-label="Settings categories"></nav>
+        <div class="settings-content" id="settings-content"></div>
+      </div>
     </div>
   </div>
 
