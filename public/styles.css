@@ -82,6 +82,12 @@ input::placeholder{color:#7c8598}
 .card-title h2{margin:4px 0 0;font-size:1.5rem;line-height:1.15;overflow-wrap:break-word}
 .card-controls{display:flex;gap:6px;flex:0 1 auto;max-width:100%;flex-wrap:wrap;justify-content:flex-end}
 .card-controls button{min-width:44px;min-height:44px;padding:8px 10px;font-size:1rem;border-radius:10px;line-height:1}
+/* drag-to-reorder handle: large target, touch-action none so touch drags track */
+.drag-handle{cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;min-width:48px;font-size:1.1rem;letter-spacing:2px}
+.drag-handle:active{cursor:grabbing}
+.section-card.dragging{opacity:.55;position:relative;z-index:5;box-shadow:0 24px 70px rgba(0,0,0,.65),inset 0 1px 0 rgba(255,255,255,.2)}
+.drop-indicator{grid-column:1 / -1;height:12px;border-radius:8px;margin:2px 0;background:rgba(199,206,219,.12);border:2px dashed rgba(199,206,219,.65);pointer-events:none}
+body.is-dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .card-body{min-width:0;max-width:100%}
 .card-body h3{font-size:1.6rem;margin:6px 0;color:#f4f6fa}
 

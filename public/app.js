@@ -119,6 +119,7 @@ function cardShell(section) {
     <div class="card-title"><span class="label">${escapeHtml(SECTION_TYPES[section.type]?.label || section.type)}</span>
     <h2>${escapeHtml(section.title)}</h2></div>
     <div class="card-controls" role="toolbar" aria-label="Section controls">
+      <button type="button" class="drag-handle" title="Drag to reorder" aria-label="Drag to reorder section">⋮⋮</button>
       <button type="button" data-act="up" title="Move up" aria-label="Move section up">▲</button>
       <button type="button" data-act="down" title="Move down" aria-label="Move section down">▼</button>
       ${TYPES_WITH_SETTINGS.has(section.type) ? '<button type="button" data-act="settings" title="Settings" aria-label="Section settings">⚙</button>' : ''}
@@ -191,6 +192,173 @@ async function moveSection(id, dir) {
   } catch (err) {
     alert(err.message);
   }
+}
+
+/* ---------- Drag to reorder (pointer-based: mouse + touch, no library) ----------
+ * A ⋮⋮ handle sits first in each card's controls. Desktop: press and drag.
+ * Touch: press-and-hold the handle (~350ms), then drag. A dashed indicator
+ * shows the drop spot. On drop the order persists through the same
+ * /api/sections/reorder endpoint the Move Up/Down buttons use.
+ * The buttons stay as the reliable path for TV remotes / air mice. */
+
+let pendingDrag = null; // press started, drag not yet begun
+let dragState = null;   // active drag: { id, card, pointerId, targetIndex, lastY, scrollDir, raf }
+
+function computeMergedOrder(allSections, draggedId, targetIndex) {
+  const ordered = allSections.slice().sort((a, b) => a.position - b.position);
+  const vis = ordered.filter(s => s.enabled);
+  const from = vis.findIndex(s => s.id === draggedId);
+  if (from < 0) return null;
+  const [moved] = vis.splice(from, 1);
+  const to = Math.max(0, Math.min(targetIndex, vis.length));
+  vis.splice(to, 0, moved);
+  // Hidden sections keep their existing slots, mirroring moveSection().
+  let vi = 0;
+  return ordered.map(s => (s.enabled ? vis[vi++] : s));
+}
+
+function dragIndicator() {
+  let el = document.getElementById('drop-indicator');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'drop-indicator';
+    el.className = 'drop-indicator';
+    el.setAttribute('aria-hidden', 'true');
+  }
+  return el;
+}
+
+function beginSectionDrag(card, pointerId) {
+  card.classList.add('dragging');
+  document.body.classList.add('is-dragging');
+  try { if (navigator.vibrate) navigator.vibrate(15); } catch { /* noop */ }
+  dragState = { id: card.dataset.sectionId, card, pointerId, targetIndex: -1, lastY: 0, scrollDir: 0, raf: 0 };
+}
+
+function moveSectionDrag(clientY) {
+  if (!dragState) return;
+  dragState.lastY = clientY;
+  const ind = dragIndicator();
+  const cards = [...dashboardEl.querySelectorAll('.section-card:not(.dragging)')];
+  let before = null;
+  for (const c of cards) {
+    const r = c.getBoundingClientRect();
+    if (clientY < r.top + r.height / 2) { before = c; break; }
+  }
+  dragState.targetIndex = before ? cards.indexOf(before) : cards.length;
+  if (before) before.before(ind);
+  else dashboardEl.append(ind);
+  autoScrollStep();
+}
+
+function autoScrollStep() {
+  const st = dragState;
+  if (!st) return;
+  const margin = 90, speed = 16;
+  const dir = st.lastY < margin ? -1 : st.lastY > window.innerHeight - margin ? 1 : 0;
+  st.scrollDir = dir;
+  if (dir && !st.raf) {
+    const step = () => {
+      if (!dragState) return;
+      window.scrollBy(0, dragState.scrollDir * speed);
+      moveSectionDrag(dragState.lastY);
+      if (dragState) dragState.raf = requestAnimationFrame(step);
+    };
+    st.raf = requestAnimationFrame(step);
+  } else if (!dir && st.raf) {
+    cancelAnimationFrame(st.raf);
+    st.raf = 0;
+  }
+}
+
+function endSectionDrag(commit) {
+  const st = dragState;
+  dragState = null;
+  pendingDrag = null;
+  document.body.classList.remove('is-dragging');
+  const ind = document.getElementById('drop-indicator');
+  if (ind) ind.remove();
+  if (!st) return;
+  st.card.classList.remove('dragging');
+  if (st.raf) cancelAnimationFrame(st.raf);
+  if (commit && st.targetIndex >= 0) commitSectionDrop(st.id, st.targetIndex);
+}
+
+function cancelPendingDrag() {
+  if (pendingDrag && pendingDrag.timer) clearTimeout(pendingDrag.timer);
+  pendingDrag = null;
+}
+
+async function commitSectionDrop(draggedId, targetIndex) {
+  const merged = computeMergedOrder(sections, draggedId, targetIndex);
+  if (!merged) { render(); return; }
+  // No-op if the order didn't actually change.
+  const before = sections.slice().sort((a, b) => a.position - b.position).map(s => s.id).join(',');
+  const after = merged.map(s => s.id).join(',');
+  if (before === after) { render(); return; }
+  try {
+    await api('/api/sections/reorder', 'PUT', { order: merged.map(s => s.id) });
+    merged.forEach((s, i) => { s.position = i; });
+    sections = merged;
+  } catch (err) {
+    alert(err.message);
+  }
+  render();
+}
+
+function enableSectionDrag() {
+  dashboardEl.addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('.drag-handle');
+    if (!handle || dragState || pendingDrag) return;
+    const card = handle.closest('.section-card');
+    if (!card) return;
+    e.preventDefault();
+    pendingDrag = {
+      card, pointerId: e.pointerId,
+      startX: e.clientX, startY: e.clientY,
+      immediate: (e.pointerType || 'mouse') !== 'touch',
+      timer: 0, dragging: false,
+    };
+    try { handle.setPointerCapture(e.pointerId); } catch { /* noop */ }
+    if (!pendingDrag.immediate) {
+      // Touch: press-and-hold to arm the drag so normal scrolling still works.
+      pendingDrag.timer = setTimeout(() => {
+        if (pendingDrag && !pendingDrag.dragging) {
+          pendingDrag.dragging = true;
+          beginSectionDrag(pendingDrag.card, pendingDrag.pointerId);
+          pendingDrag = null;
+        }
+      }, 350);
+    }
+  });
+
+  dashboardEl.addEventListener('pointermove', (e) => {
+    if (dragState && e.pointerId === dragState.pointerId) {
+      moveSectionDrag(e.clientY);
+      return;
+    }
+    if (pendingDrag && e.pointerId === pendingDrag.pointerId && !pendingDrag.dragging) {
+      const dist = Math.hypot(e.clientX - pendingDrag.startX, e.clientY - pendingDrag.startY);
+      if (pendingDrag.immediate) {
+        if (dist > 8) {
+          const { card, pointerId } = pendingDrag;
+          pendingDrag = null;
+          beginSectionDrag(card, pointerId);
+          moveSectionDrag(e.clientY);
+        }
+      } else if (dist > 14) {
+        // Finger wandered before the hold finished: let it scroll instead.
+        cancelPendingDrag();
+      }
+    }
+  });
+
+  const finish = (e) => {
+    if (dragState && e.pointerId === dragState.pointerId) endSectionDrag(true);
+    else if (pendingDrag && e.pointerId === pendingDrag.pointerId) cancelPendingDrag();
+  };
+  dashboardEl.addEventListener('pointerup', finish);
+  dashboardEl.addEventListener('pointercancel', finish);
 }
 
 /* ---------- Simple renderers ---------- */
@@ -876,6 +1044,7 @@ function render() {
 /* ---------- Boot ---------- */
 async function boot() {
   renderGreeting();
+  enableSectionDrag();
   $('#add-section-btn').addEventListener('click', openAddModal);
   $('#add-modal-close').addEventListener('click', closeAddModal);
   $('#add-modal').addEventListener('click', (e) => { if (e.target.id === 'add-modal') closeAddModal(); });
