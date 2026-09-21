@@ -376,8 +376,15 @@ export default {
                 (request.headers.get("range") || "").trim()
               );
               if (rm && (rm[1] !== "" || rm[2] !== "")) {
-                let start = rm[1] === "" ? total - parseInt(rm[2], 10) : parseInt(rm[1], 10);
-                let end = rm[2] === "" ? total - 1 : parseInt(rm[2], 10);
+                let start, end;
+                if (rm[1] === "") {
+                  // Suffix range: last N bytes.
+                  start = Math.max(0, total - parseInt(rm[2], 10));
+                  end = total - 1;
+                } else {
+                  start = parseInt(rm[1], 10);
+                  end = rm[2] === "" ? total - 1 : parseInt(rm[2], 10);
+                }
                 if (Number.isNaN(start) || Number.isNaN(end) || start < 0 || end < start || start >= total) {
                   return new Response("Range not satisfiable", {
                     status: 416,
