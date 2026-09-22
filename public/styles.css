@@ -108,8 +108,10 @@ input[type=range]::-moz-range-thumb{width:28px;height:28px;border-radius:50%;bac
 
 /* ---- dashboard framework: flexible 12-column grid ----
  * Sizes: S = span 3 (4 across) · M = span 4 (3 across, the default) ·
- * L = span 6 (2 across). Every card is one widget; the grid is the system. */
-.dashboard{display:grid;grid-template-columns:repeat(12,1fr);gap:18px;margin-bottom:18px;width:100%}
+ * L = span 6 (2 across). Every card is one widget; the grid is the system.
+ * Masonry: a small row unit (12px) + dense flow; JS measures each card and
+ * sets grid-row-end: span N, so short cards stack beside tall ones. */
+.dashboard{display:grid;grid-template-columns:repeat(12,1fr);grid-auto-rows:12px;grid-auto-flow:dense;gap:18px;margin-bottom:18px;width:100%}
 .section-card{display:flex;flex-direction:column;min-width:0;grid-column:span 4}
 .section-card.size-s{grid-column:span 3}
 .section-card.size-l{grid-column:span 6}
@@ -371,6 +373,35 @@ body.editing .section-card{border-style:dashed;border-color:rgba(199,206,219,.45
 }
 .ql-btn:hover{background:#3d4350;border-color:rgba(220,226,238,.55)}
 
+/* ---- RSS feed ---- */
+.rss-list{display:grid;gap:10px;min-width:0}
+.rss-item{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:13px 16px;border:1px solid rgba(199,206,219,.14);border-radius:14px;background:var(--inset);color:var(--text);text-decoration:none;min-width:0}
+.rss-item:hover{background:rgba(30,34,43,.8)}
+.rss-item strong{font-weight:600;min-width:0;overflow-wrap:break-word}
+.rss-item small{flex-shrink:0}
+
+/* ---- video spotlight ---- */
+.spot-embed{position:relative;width:100%;aspect-ratio:16/9;border-radius:var(--radius-inner);overflow:hidden;background:#000;min-width:0}
+.spot-embed iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.spot-title{margin:10px 0 0;overflow-wrap:break-word}
+.spot-expand{margin-top:12px;width:100%}
+.spot-modal{width:min(900px,100%)}
+
+/* ---- live scores ---- */
+.score-list{display:grid;gap:8px;min-width:0}
+.score-game{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border:1px solid rgba(199,206,219,.14);border-radius:14px;background:var(--inset);min-width:0;flex-wrap:wrap}
+.score-game.is-live{border-color:rgba(224,122,122,.55)}
+.score-teams{min-width:0;overflow-wrap:break-word}
+.score-teams .vs{color:var(--text-faint);font-size:.85rem}
+.score-right{display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap}
+.score-nums{font-weight:700;font-variant-numeric:tabular-nums}
+.live-pill{background:#7a2b34;color:#ffd9de;font-size:.72rem;font-weight:800;letter-spacing:.08em;border-radius:999px;padding:4px 10px}
+.score-when{font-size:.85rem}
+
+/* ---- countdown ---- */
+.countdown{text-align:center;padding:12px 0;min-width:0}
+.countdown-big{font-size:clamp(1.8rem,6vw,2.6rem);font-weight:800;color:var(--text-bright);font-variant-numeric:tabular-nums;overflow-wrap:break-word}
+
 /* ---- per-card Edit button (visible on the card; real button for TV remotes) ---- */
 .card-edit-btn{
   flex-shrink:0;min-height:44px;padding:8px 18px;border-radius:999px;
@@ -442,10 +473,12 @@ body.font-large button{min-height:48px}
 .hidden-bar,.hidden-list,.type-picker,.modal,.quick-launch,.ai-widget,.ai-chips,.ai-pick,.set-group,
 .topbar-inner,.topbar-actions,.card-menu,.settings-layout,.settings-content,
 .settings-nav,.pref-row,.order-row,.skel-stack,.error-box,.type-group,.myday,
-.myday-meta,.rename-bar,.rename-form{min-width:0}
+.myday-meta,.rename-bar,.rename-form,.rss-list,.rss-item,.score-list,.score-game,
+.countdown,.spot-embed{min-width:0}
 .card-body,.card-title h2,.settings-pane,.team-main,.notes-area,.listen-link,
 .hidden-chip,.empty,.upload-status,.ai-cta,.ai-chip,.ai-pick-name,
-.myday-clock,.myday-date,.myday-next,.myday-line{overflow-wrap:break-word}
+.myday-clock,.myday-date,.myday-next,.myday-line,.rss-item strong,.score-teams,
+.countdown-big,.spot-title{overflow-wrap:break-word}
 
 /* ---- responsive ---- */
 @media(max-width:1100px){

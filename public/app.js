@@ -61,15 +61,19 @@ const SECTION_TYPES = {
   notes:    { label: 'Notes', desc: 'Quick notes, saved automatically on HD.' },
   ai:         { label: 'AI', desc: 'Your AI launchers — pick which services appear inside.' },
   quicklinks: { label: 'Quick Links', desc: 'The sites you open every day — one tap away.' },
+  rss:        { label: 'RSS Feed', desc: 'Headlines from any RSS or Atom feed.' },
+  ytspotlight:{ label: 'Video Spotlight', desc: 'A channel’s latest video, playing in the card.' },
+  scores:     { label: 'Live Scores', desc: 'Live scores: NFL, MLB, NBA, NHL.' },
+  countdown:  { label: 'Countdown', desc: 'Count down to a big day.' },
 };
 const TYPE_GROUPS = [
   { title: 'Essentials', types: ['myday', 'greeting', 'search', 'quicklinks'] },
-  { title: 'Information', types: ['weather', 'sports'] },
-  { title: 'Media', types: ['youtube'] },
-  { title: 'Personal', types: ['projects', 'files', 'links', 'notes'] },
+  { title: 'Information', types: ['weather', 'sports', 'rss', 'scores'] },
+  { title: 'Media', types: ['youtube', 'ytspotlight'] },
+  { title: 'Personal', types: ['projects', 'files', 'links', 'notes', 'countdown'] },
   { title: 'AI', types: ['ai'] },
 ];
-const TYPES_WITH_SETTINGS = new Set(['weather', 'sports', 'youtube', 'links', 'ai', 'quicklinks']);
+const TYPES_WITH_SETTINGS = new Set(['weather', 'sports', 'youtube', 'links', 'ai', 'quicklinks', 'rss', 'ytspotlight', 'scores', 'countdown']);
 const SIZES = ['S', 'M', 'L'];
 const SIZE_NAMES = { S: 'Small', M: 'Medium', L: 'Large' };
 
@@ -972,6 +976,280 @@ function buildYouTubeSettings(section, pane, body) {
   render();
 }
 
+/* ---------- RSS feed (fetched server-side; no CORS issues) ---------- */
+async function renderRssSection(section, body) {
+  const s = section.settings || {};
+  const feedUrl = (s.feedUrl || '').trim();
+  if (!feedUrl) {
+    showEmpty(body, '📰', 'No feed yet.', 'Tap Edit on this card to add an RSS or Atom feed URL.');
+    return;
+  }
+  const count = Math.min(20, Math.max(1, Number(s.count) || 8));
+  showLoading(body, 4);
+  let data;
+  try {
+    const res = await fetch(`/api/rss?url=${encodeURIComponent(feedUrl)}`);
+    data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Feed unavailable.');
+  } catch (err) {
+    showError(body, err.message || "Couldn't load that feed right now.", () => renderRssSection(section, body));
+    return;
+  }
+  const items = (data.items || []).slice(0, count);
+  body.innerHTML = `
+    <div class="rss-list">
+      ${items.map((it) => {
+        const d = it.pubDate ? new Date(it.pubDate) : null;
+        const date = d && !isNaN(d) ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+        return `<a class="rss-item" href="${escapeHtml(it.link || '#')}" target="_blank" rel="noopener">
+          <strong>${escapeHtml(it.title || 'Untitled')}</strong>${date ? `<small class="muted">${escapeHtml(date)}</small>` : ''}
+        </a>`;
+      }).join('') || '<div class="empty">This feed has no stories right now.</div>'}
+    </div>`;
+}
+
+function buildRssSettings(section, pane, body) {
+  const s = section.settings || {};
+  pane.innerHTML = `
+    <form class="settings-form" id="rss-form">
+      <label>Feed URL
+        <input name="feedUrl" type="url" inputmode="url" placeholder="https://example.com/feed.xml" value="${escapeHtml(s.feedUrl || '')}" required>
+      </label>
+      <label>Title override (optional)
+        <input name="titleOverride" placeholder="Leave blank to use the feed's own title" value="${escapeHtml(s.titleOverride || '')}">
+      </label>
+      <label>Stories to show
+        <select name="count">
+          ${[5, 8, 12, 15, 20].map(n => `<option value="${n}" ${(Number(s.count) || 8) === n ? 'selected' : ''}>${n}</option>`).join('')}
+        </select>
+      </label>
+      <button type="submit">Save</button>
+      <p class="muted">Any public RSS or Atom feed works — news sites, blogs, podcasts, even YouTube channels.</p>
+    </form>`;
+  $('#rss-form', pane).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const patch = {
+      feedUrl: f.feedUrl.value.trim(),
+      titleOverride: f.titleOverride.value.trim(),
+      count: Number(f.count.value) || 8,
+    };
+    if (!/^https?:\/\//i.test(patch.feedUrl)) { alert('The feed URL should start with http:// or https://'); return; }
+    await saveSection(section.id, { settings: patch });
+    renderRssSection(getSection(section.id), body);
+  });
+}
+
+/* ---------- Video spotlight: latest video from a channel, playing ---------- */
+function extractVideoId(input) {
+  const v = (input || '').trim();
+  const m = v.match(/[?&]v=([A-Za-z0-9_-]{11})/) || v.match(/youtu\.be\/([A-Za-z0-9_-]{11})/)
+    || v.match(/\/embed\/([A-Za-z0-9_-]{11})/) || v.match(/^([A-Za-z0-9_-]{11})$/);
+  return m ? m[1] : null;
+}
+
+async function renderSpotlightSection(section, body) {
+  const s = section.settings || {};
+  const videoUrl = (s.videoUrl || '').trim();
+  const channel = (s.channel || '').trim();
+  let videoId = extractVideoId(videoUrl);
+  let title = '';
+  if (!videoId) {
+    if (!channel) {
+      showEmpty(body, '🎬', 'No channel yet.', 'Tap Edit on this card to pick a YouTube channel or paste a video.');
+      return;
+    }
+    showLoading(body, 2);
+    try {
+      const res = await fetch(`/api/yt-latest?channel=${encodeURIComponent(channel)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Channel unavailable.');
+      videoId = data.videoId;
+      title = data.title || '';
+    } catch (err) {
+      showError(body, err.message || "Couldn't load that channel right now.", () => renderSpotlightSection(section, body));
+      return;
+    }
+  }
+  const embed = `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&playsinline=1&rel=0`;
+  body.innerHTML = `
+    <div class="spot-embed"><iframe src="${escapeHtml(embed)}" title="${escapeHtml(title || 'Video')}"
+      allow="accelerometer; autoplay; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe></div>
+    ${title ? `<p class="spot-title">${escapeHtml(title)}</p>` : ''}
+    <button type="button" class="spot-expand">⛶ Expand</button>`;
+  $('.spot-expand', body).addEventListener('click', () => openSpotlightModal(videoId, title));
+}
+
+function openSpotlightModal(videoId, title) {
+  const backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.innerHTML = `
+    <div class="modal spot-modal" role="dialog" aria-modal="true" aria-label="${escapeHtml(title || 'Video')}">
+      <div class="modal-head"><h2>${escapeHtml(title || 'Video')}</h2>
+      <button type="button" data-close aria-label="Close">✕</button></div>
+      <div class="spot-embed"><iframe src="https://www.youtube-nocookie.com/embed/${escapeHtml(videoId)}?autoplay=1&rel=0"
+        title="${escapeHtml(title || 'Video')}" allow="accelerometer; autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe></div>
+    </div>`;
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  const close = () => {
+    document.removeEventListener('keydown', onKey);
+    backdrop.remove();
+  };
+  backdrop.addEventListener('click', (e) => {
+    if (e.target === backdrop || e.target.closest('[data-close]')) close();
+  });
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(backdrop);
+  const btn = backdrop.querySelector('[data-close]');
+  if (btn) btn.focus();
+}
+
+function buildSpotlightSettings(section, pane, body) {
+  const s = section.settings || {};
+  pane.innerHTML = `
+    <form class="settings-form" id="spot-form">
+      <label>YouTube channel
+        <input name="channel" placeholder="@handle, channel URL, or UC… ID" value="${escapeHtml(s.channel || '')}">
+      </label>
+      <label>Single video override (optional)
+        <input name="videoUrl" type="url" inputmode="url" placeholder="Paste a YouTube video URL to pin it" value="${escapeHtml(s.videoUrl || '')}">
+      </label>
+      <button type="submit">Save</button>
+      <p class="muted">Plays the channel's latest video automatically — muted until you tap, that's a browser rule, not ours. The override pins one video instead.</p>
+    </form>`;
+  $('#spot-form', pane).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const patch = { channel: f.channel.value.trim(), videoUrl: f.videoUrl.value.trim() };
+    if (!patch.channel && !patch.videoUrl) { alert('Add a channel or a video URL.'); return; }
+    await saveSection(section.id, { settings: patch });
+    renderSpotlightSection(getSection(section.id), body);
+  });
+}
+
+/* ---------- Live scores (ESPN scoreboard; no key) ---------- */
+const SCORE_LEAGUES = { nfl: 'NFL', mlb: 'MLB', nba: 'NBA', nhl: 'NHL' };
+
+async function renderScoresSection(section, body) {
+  const league = ((section.settings || {}).league || 'nfl').toLowerCase();
+  showLoading(body, 3);
+  const load = async () => {
+    try {
+      const res = await fetch(`/api/scores?league=${encodeURIComponent(league)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Scores unavailable.');
+      paintScores(body, data);
+    } catch (err) {
+      showError(body, err.message || 'Scores are unavailable right now.', load);
+    }
+  };
+  await load();
+  // Refresh every 3 minutes while this card is on the page.
+  const timer = setInterval(() => {
+    if (body.isConnected) load();
+    else clearInterval(timer);
+  }, 180000);
+  liveTimers.push(timer);
+}
+
+function paintScores(body, data) {
+  const games = data.games || [];
+  if (!games.length) {
+    showEmpty(body, '🏟️', 'No games right now.', 'Check back during the season — scores appear automatically.');
+    return;
+  }
+  body.innerHTML = `<div class="score-list">${games.map((g) => {
+    const live = g.status === 'live';
+    const d = g.date ? new Date(g.date) : null;
+    const sched = d && !isNaN(d)
+      ? d.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+    const when = live ? [g.clock, g.period ? `Q${g.period}` : ''].filter(Boolean).join(' • ')
+      : g.status === 'final' ? 'Final' : sched;
+    const teams = `${escapeHtml(g.awayAbbr || g.away)} <span class="vs">@</span> ${escapeHtml(g.homeAbbr || g.home)}`;
+    const nums = (g.awayScore !== '' || g.homeScore !== '') ? `${escapeHtml(g.awayScore)} – ${escapeHtml(g.homeScore)}` : '';
+    return `<div class="score-game${live ? ' is-live' : ''}">
+      <div class="score-teams"><strong>${teams}</strong><br><small class="muted">${escapeHtml(g.away)} at ${escapeHtml(g.home)}</small></div>
+      <div class="score-right">
+        ${nums ? `<span class="score-nums">${nums}</span>` : ''}
+        ${live ? '<span class="live-pill">LIVE</span>' : ''}
+        ${when ? `<small class="muted score-when">${escapeHtml(when)}</small>` : ''}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function buildScoresSettings(section, pane, body) {
+  const league = ((section.settings || {}).league || 'nfl').toLowerCase();
+  pane.innerHTML = `
+    <form class="settings-form" id="scores-form">
+      <label>League
+        <select name="league">
+          ${Object.entries(SCORE_LEAGUES).map(([v, l]) => `<option value="${v}" ${league === v ? 'selected' : ''}>${l}</option>`).join('')}
+        </select>
+      </label>
+      <button type="submit">Save</button>
+      <p class="muted">Scores refresh themselves every few minutes while the page is open.</p>
+    </form>`;
+  $('#scores-form', pane).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await saveSection(section.id, { settings: { league: e.target.league.value } });
+    renderScoresSection(getSection(section.id), body);
+  });
+}
+
+/* ---------- Countdown (pure frontend) ---------- */
+function renderCountdownSection(section, body) {
+  const s = section.settings || {};
+  if (!s.target) {
+    showEmpty(body, '⏳', 'No countdown yet.', 'Tap Edit on this card to pick a date.');
+    return;
+  }
+  body.innerHTML = `
+    <div class="countdown">
+      <div class="countdown-big" data-cd>--</div>
+      ${s.label ? `<div class="muted">${escapeHtml(s.label)}</div>` : ''}
+    </div>`;
+  const el = body.querySelector('[data-cd]');
+  const target = new Date(s.target).getTime();
+  if (isNaN(target)) {
+    el.textContent = 'That date didn’t parse — edit the card and pick it again.';
+    return;
+  }
+  const tick = () => {
+    if (!el.isConnected) { clearInterval(timer); return; }
+    const diff = target - Date.now();
+    if (diff <= 0) { el.textContent = "It's here! 🎉"; clearInterval(timer); return; }
+    const d = Math.floor(diff / 86400000);
+    const h = Math.floor(diff / 3600000) % 24;
+    const m = Math.floor(diff / 60000) % 60;
+    const sec = Math.floor(diff / 1000) % 60;
+    el.textContent = `${d}d ${h}h ${m}m ${sec}s`;
+  };
+  tick();
+  const timer = setInterval(tick, 1000);
+  liveTimers.push(timer);
+}
+
+function buildCountdownSettings(section, pane, body) {
+  const s = section.settings || {};
+  pane.innerHTML = `
+    <form class="settings-form" id="cd-form">
+      <label>Label
+        <input name="label" placeholder="e.g. Christmas, Opening Day" value="${escapeHtml(s.label || '')}">
+      </label>
+      <label>Count down to
+        <input name="target" type="datetime-local" value="${escapeHtml(s.target || '')}" required>
+      </label>
+      <button type="submit">Save</button>
+    </form>`;
+  $('#cd-form', pane).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    await saveSection(section.id, { settings: { label: f.label.value.trim(), target: f.target.value } });
+    renderCountdownSection(getSection(section.id), body);
+  });
+}
+
 /* ---------- Files (D1 blob storage) ---------- */
 async function renderFilesSection(section, body) {
   body.innerHTML = `
@@ -1477,6 +1755,10 @@ function buildSettingsPane(section, pane, body) {
     links: buildLinksSettings,
     ai: buildAiSettings,
     quicklinks: buildQuickLinksSettings,
+    rss: buildRssSettings,
+    ytspotlight: buildSpotlightSettings,
+    scores: buildScoresSettings,
+    countdown: buildCountdownSettings,
   };
   if (builders[section.type]) builders[section.type](section, pane, body);
   else pane.innerHTML = '<div class="empty">No settings for this section.</div>';
@@ -1693,11 +1975,51 @@ const RENDERERS = {
   ai: renderAiSection,
   quicklinks: renderQuickLinksSection,
   myday: renderMyDaySection,
+  rss: renderRssSection,
+  ytspotlight: renderSpotlightSection,
+  scores: renderScoresSection,
+  countdown: renderCountdownSection,
 };
+
+/* ---------- Masonry layout: small cards stack beside tall ones ----------
+ * The dashboard grid uses a small row unit (12px) + dense flow; each card
+ * is measured after render and spans as many rows as it needs. Re-runs
+ * after content loads (MutationObserver), on resize, and after fonts. */
+let masonryQueued = false;
+function layoutMasonry() {
+  masonryQueued = false;
+  const dash = dashboardEl;
+  if (!dash) return;
+  const cards = dash.querySelectorAll('.section-card');
+  if (!cards.length) return;
+  const cs = getComputedStyle(dash);
+  const rowH = parseFloat(cs.getPropertyValue('grid-auto-rows')) || 12;
+  const gap = parseFloat(cs.getPropertyValue('row-gap')) || 0;
+  cards.forEach((card) => {
+    card.style.gridRowEnd = '';
+    const h = card.offsetHeight;
+    const span = Math.max(1, Math.ceil((h + gap) / (rowH + gap)));
+    card.style.gridRowEnd = `span ${span}`;
+  });
+}
+function scheduleMasonry() {
+  if (masonryQueued) return;
+  masonryQueued = true;
+  requestAnimationFrame(() => setTimeout(layoutMasonry, 60));
+}
+
+/* ---------- Live section timers (scores refresh, countdown tick) ----------
+ * Cleared on every render() so stale intervals never pile up. */
+let liveTimers = [];
+function clearLiveTimers() {
+  liveTimers.forEach((t) => clearInterval(t));
+  liveTimers = [];
+}
 
 function render() {
   closeCardMenu();
   if (myDayTimer) { clearInterval(myDayTimer); myDayTimer = 0; }
+  clearLiveTimers();
   renderGreeting();
   dashboardEl.innerHTML = '';
   const vis = visibleSections();
@@ -1725,6 +2047,7 @@ function render() {
     await saveSection(btn.dataset.show, { enabled: true });
     render();
   }));
+  layoutMasonry();
 }
 
 /* ---------- Boot ---------- */
@@ -1733,6 +2056,15 @@ async function boot() {
   renderGreeting();
   enableSectionDrag();
   renderBootSkeletons();
+
+  // Masonry re-stacks whenever card content changes, images load, the
+  // window resizes, or fonts arrive.
+  const dashObserver = new MutationObserver(scheduleMasonry);
+  dashObserver.observe(dashboardEl, { childList: true, subtree: true });
+  dashboardEl.addEventListener('load', scheduleMasonry, true);
+  window.addEventListener('resize', scheduleMasonry);
+  window.addEventListener('load', scheduleMasonry);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(scheduleMasonry);
 
   $('#add-section-btn').addEventListener('click', openAddModal);
   $('#add-modal-close').addEventListener('click', closeAddModal);
