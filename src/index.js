@@ -20,6 +20,8 @@ const SECTION_TYPES = new Set([
   "projects", "files", "links", "notes",
   "ai", "quicklinks", "myday",
   "rss", "ytspotlight", "scores", "countdown",
+  "verse", "checklist", "radio", "alerts", "photos",
+  "callbuttons", "standings", "stocks", "monthcal", "quote",
 ]);
 
 // Tiny in-memory cache (per Worker isolate — plenty for a personal
@@ -398,6 +400,138 @@ export default {
       }
     }
 
+    // ---- NOAA weather alerts (api.weather.gov — free, no key) ----
+    // Slimmed server-side; cached 10 minutes. Calm data only — the UI
+    // decides how to present it.
+
+    if (url.pathname === "/api/alerts" && request.method === "GET") {
+      const lat = Number(url.searchParams.get("lat"));
+      const lon = Number(url.searchParams.get("lon"));
+      if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+        return json({ error: "Send ?lat= and ?lon= with a valid location." }, 400, corsHeaders);
+      }
+      const key = `alerts:${lat.toFixed(2)},${lon.toFixed(2)}`;
+      const hit = cacheGet(key, 10 * 60 * 1000);
+      if (hit) return json(hit, 200, corsHeaders);
+      try {
+        const resp = await fetch(
+          `https://api.weather.gov/alerts/active?point=${lat.toFixed(2)},${lon.toFixed(2)}`,
+          { headers: { "user-agent": FETCH_UA, "accept": "application/geo+json" } }
+        );
+        if (!resp.ok) throw new Error(`nws HTTP ${resp.status}`);
+        const data = await resp.json();
+        const alerts = ((data.features || []).map((f) => {
+          const p = f.properties || {};
+          return {
+            headline: String(p.headline || p.event || "Weather alert").slice(0, 200),
+            severity: String(p.severity || "Unknown"),
+            areas: String(p.areaDesc || "").slice(0, 200),
+            expires: String(p.expires || ""),
+          };
+        }));
+        const out = { alerts };
+        cacheSet(key, out);
+        return json(out, 200, corsHeaders);
+      } catch (e) {
+        return json({ error: "Weather alerts are unavailable right now." }, 502, corsHeaders);
+      }
+    }
+
+    // ---- Sports standings (ESPN's free standings API — no key needed) ----
+    // Slimmed server-side; cached 30 minutes. Stats are read by name so
+    // league quirks (ties, points) don't break the parse.
+
+    if (url.pathname === "/api/standings" && request.method === "GET") {
+      const league = (url.searchParams.get("league") || "nfl").toLowerCase();
+      const sportPath = ESPN_PATHS[league];
+      if (!sportPath) {
+        return json({ error: "Unknown league. Use nfl, mlb, nba, or nhl." }, 400, corsHeaders);
+      }
+      const key = "standings:" + league;
+      const hit = cacheGet(key, 30 * 60 * 1000);
+      if (hit) return json(hit, 200, corsHeaders);
+      try {
+        const resp = await fetch(
+          `https://site.api.espn.com/apis/site/v2/sports/${sportPath}/standings`,
+          { headers: { "user-agent": FETCH_UA } }
+        );
+        if (!resp.ok) throw new Error(`espn HTTP ${resp.status}`);
+        const data = await resp.json();
+        const groups = data.children || [];
+        const statVal = (stats, names) => {
+          const s = (stats || []).find((x) => names.includes(String(x.name).toLowerCase()));
+          return s && s.value != null ? String(s.value) : "";
+        };
+        const rows = [];
+        for (const g of groups) {
+          const entries = (g.standings && g.standings.entries) || [];
+          for (const e of entries) {
+            const t = e.team || {};
+            rows.push({
+              group: String(g.name || g.abbreviation || "").slice(0, 40),
+              team: t.shortDisplayName || t.displayName || t.abbreviation || "Team",
+              abbr: String(t.abbreviation || "").slice(0, 6),
+              w: statVal(e.stats, ["wins", "w"]),
+              l: statVal(e.stats, ["losses", "l"]),
+              t: statVal(e.stats, ["ties", "otlosses"]),
+            });
+          }
+        }
+        const out = { league, rows };
+        cacheSet(key, out);
+        return json(out, 200, corsHeaders);
+      } catch (e) {
+        return json({ error: "Standings are unavailable right now." }, 502, corsHeaders);
+      }
+    }
+
+    // ---- Stock quotes (Stooq's free CSV — no key needed) ----
+    // Symbols are normalized to Stooq's ".us" suffix. Cached 5 minutes.
+    // Day change % is (last − open) / open from the same quote row.
+
+    if (url.pathname === "/api/quote" && request.method === "GET") {
+      const raw = (url.searchParams.get("symbols") || "").trim();
+      const syms = raw.split(",").map((x) => x.trim()).filter(Boolean).slice(0, 10);
+      if (!syms.length || syms.some((x) => !/^[A-Za-z0-9.]{1,12}$/.test(x))) {
+        return json({ error: "Send ?symbols= with up to 10 ticker symbols, e.g. AAPL,MSFT." }, 400, corsHeaders);
+      }
+      const stooq = syms.map((x) => (x.includes(".") ? x : x + ".us").toLowerCase()).join(",");
+      const key = "quote:" + stooq;
+      const hit = cacheGet(key, 5 * 60 * 1000);
+      if (hit) return json(hit, 200, corsHeaders);
+      try {
+        const resp = await fetch(
+          `https://stooq.com/q/l/?s=${encodeURIComponent(stooq)}&f=sd2t2ohlcv&h&e=csv`,
+          { headers: { "user-agent": FETCH_UA } }
+        );
+        if (!resp.ok) throw new Error(`stooq HTTP ${resp.status}`);
+        const text = await resp.text();
+        const lines = text.trim().split("\n").slice(1); // drop header
+        const quotes = [];
+        const errors = [];
+        for (const line of lines) {
+          const cols = line.split(",");
+          const symbol = (cols[0] || "").replace(/\.us$/i, "").toUpperCase();
+          const open = parseFloat(cols[3]);
+          const close = parseFloat(cols[6]);
+          if (!symbol || !isFinite(open) || !isFinite(close) || open <= 0) {
+            if (symbol) errors.push(symbol);
+            continue;
+          }
+          quotes.push({
+            symbol,
+            price: Math.round(close * 100) / 100,
+            changePct: Math.round(((close - open) / open) * 1000) / 10,
+          });
+        }
+        const out = { quotes, errors };
+        cacheSet(key, out);
+        return json(out, 200, corsHeaders);
+      } catch (e) {
+        return json({ error: "Quotes are unavailable right now." }, 502, corsHeaders);
+      }
+    }
+
     // ---- File uploads (stored as blobs via the storage backend) ----
 
     if (url.pathname === "/api/files" && request.method === "POST") {
@@ -557,6 +691,10 @@ function defaultTitleFor(type) {
     ai: "AI", quicklinks: "Quick Links", myday: "My Day",
     rss: "Feed", ytspotlight: "Spotlight", scores: "Scores",
     countdown: "Countdown",
+    verse: "Verse", checklist: "Checklist", radio: "Radio",
+    alerts: "Alerts", photos: "Photos", callbuttons: "Call",
+    standings: "Standings", stocks: "Stocks", monthcal: "Calendar",
+    quote: "Quote",
   }[type] || "Section";
 }
 

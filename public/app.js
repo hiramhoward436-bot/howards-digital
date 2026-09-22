@@ -47,33 +47,47 @@ function fmtDay(iso) {
 
 /* ---------- Section types ----------
  * ONLY types listed here appear in the + Add Section catalog — every one
- * of them is a real, working widget. Nothing fake, nothing dead. */
+ * of them is a real, working widget. Nothing fake, nothing dead.
+ * tags drive the catalog filter chips; keywords feed catalog search;
+ * hot marks the new/exciting ones for the 🔥 Hot filter. */
 const SECTION_TYPES = {
-  myday:   { label: 'My Day', desc: 'Clock, date, weather, and what\u2019s next today.' },
-  greeting: { label: 'Greeting', desc: 'A welcome banner with the time of day.' },
-  search:   { label: 'Search', desc: 'A Google search bar.' },
-  weather:  { label: 'Weather', desc: 'Current conditions. Tap for a 5-day forecast.' },
-  sports:   { label: 'Sports', desc: 'Follow your teams — scores and schedules.' },
-  youtube:  { label: 'YouTube', desc: 'Latest videos from channels you add.' },
-  projects: { label: 'Projects', desc: 'Your HD project workspace.' },
-  files:    { label: 'Files', desc: 'Upload files and share them with a link.' },
-  links:    { label: 'Links', desc: 'Your own list of favorite links.' },
-  notes:    { label: 'Notes', desc: 'Quick notes, saved automatically on HD.' },
-  ai:         { label: 'AI', desc: 'Your AI launchers — pick which services appear inside.' },
-  quicklinks: { label: 'Quick Links', desc: 'The sites you open every day — one tap away.' },
-  rss:        { label: 'RSS Feed', desc: 'Headlines from any RSS or Atom feed.' },
-  ytspotlight:{ label: 'Video Spotlight', desc: 'A channel’s latest video, playing in the card.' },
-  scores:     { label: 'Live Scores', desc: 'Live scores: NFL, MLB, NBA, NHL.' },
-  countdown:  { label: 'Countdown', desc: 'Count down to a big day.' },
+  myday:   { label: 'My Day', desc: 'Clock, date, weather, and what\u2019s next today.', tags: ['Essentials'], keywords: 'clock today agenda calendar schedule', hot: false },
+  greeting: { label: 'Greeting', desc: 'A welcome banner with the time of day.', tags: ['Essentials'], keywords: 'welcome hello banner', hot: false },
+  search:   { label: 'Search', desc: 'A Google search bar.', tags: ['Essentials'], keywords: 'google find lookup', hot: false },
+  weather:  { label: 'Weather', desc: 'Current conditions. Tap for a 5-day forecast.', tags: ['Information'], keywords: 'forecast temperature rain', hot: false },
+  sports:   { label: 'Sports', desc: 'Follow your teams — scores and schedules.', tags: ['Information'], keywords: 'teams games nfl mlb nba nhl', hot: false },
+  youtube:  { label: 'YouTube', desc: 'Latest videos from channels you add.', tags: ['Media'], keywords: 'videos channels subscriptions', hot: false },
+  projects: { label: 'Projects', desc: 'Your HD project workspace.', tags: ['Personal'], keywords: 'workspace tasks', hot: false },
+  files:    { label: 'Files', desc: 'Upload files and share them with a link.', tags: ['Personal'], keywords: 'upload documents share storage', hot: false },
+  links:    { label: 'Links', desc: 'Your own list of favorite links.', tags: ['Personal'], keywords: 'bookmarks favorites urls', hot: false },
+  notes:    { label: 'Notes', desc: 'Quick notes, saved automatically on HD.', tags: ['Personal'], keywords: 'notepad memo write', hot: false },
+  ai:         { label: 'AI', desc: 'Your AI launchers — pick which services appear inside.', tags: ['Essentials'], keywords: 'chatgpt Muse grok assistant launchers', hot: false },
+  quicklinks: { label: 'Quick Links', desc: 'The sites you open every day — one tap away.', tags: ['Essentials'], keywords: 'shortcuts sites daily', hot: false },
+  rss:        { label: 'RSS Feed', desc: 'Headlines from any RSS or Atom feed.', tags: ['Information'], keywords: 'news headlines blog feed reader', hot: true },
+  ytspotlight:{ label: 'Video Spotlight', desc: 'A channel\u2019s latest video, playing in the card.', tags: ['Media'], keywords: 'youtube video player watch latest', hot: true },
+  scores:     { label: 'Live Scores', desc: 'Live scores: NFL, MLB, NBA, NHL.', tags: ['Information'], keywords: 'games live sports nfl mlb nba nhl results', hot: true },
+  countdown:  { label: 'Countdown', desc: 'Count down to a big day.', tags: ['Personal'], keywords: 'timer days until event', hot: false },
+  verse:      { label: 'Verse of the Day', desc: 'A KJV verse every day, picked for you.', tags: ['Faith'], keywords: 'bible scripture kjv daily devotional god', hot: true },
+  checklist:  { label: 'Checklist', desc: 'Prayer lists, reminders, to-dos — check things off.', tags: ['Productivity'], keywords: 'prayer reminder todo tasks list check off', hot: false },
+  radio:      { label: 'Radio', desc: 'Play a live radio stream right on your dashboard.', tags: ['Entertainment'], keywords: 'stream station music listen audio live', hot: true },
+  alerts:     { label: 'Weather Alerts', desc: 'Active NOAA weather alerts for your area.', tags: ['Information'], keywords: 'noaa warnings watch advisory storm severe', hot: false },
+  photos:     { label: 'Photos', desc: 'Your pictures, rotating on a timer.', tags: ['Entertainment'], keywords: 'pictures slideshow images family gallery', hot: true },
+  callbuttons:{ label: 'Tap to Call', desc: 'Big one-tap buttons for the people you call most.', tags: ['Productivity'], keywords: 'phone dial contacts call number', hot: false },
+  standings:  { label: 'Standings', desc: 'League standings: NFL, MLB, NBA, NHL.', tags: ['Information'], keywords: 'table wins losses nfl mlb nba nhl records', hot: false },
+  stocks:     { label: 'Stocks', desc: 'Watch your tickers with daily change.', tags: ['Information'], keywords: 'shares market price ticker portfolio investing', hot: false },
+  monthcal:   { label: 'Month Calendar', desc: 'The month at a glance, with your events dotted.', tags: ['Productivity'], keywords: 'calendar month events days agenda schedule', hot: false },
+  quote:      { label: 'Quote of the Day', desc: 'A fresh bit of inspiration every morning.', tags: ['Faith'], keywords: 'inspiration wisdom daily saying encouragement', hot: false },
 };
 const TYPE_GROUPS = [
   { title: 'Essentials', types: ['myday', 'greeting', 'search', 'quicklinks'] },
-  { title: 'Information', types: ['weather', 'sports', 'rss', 'scores'] },
-  { title: 'Media', types: ['youtube', 'ytspotlight'] },
+  { title: 'Information', types: ['weather', 'sports', 'rss', 'scores', 'standings', 'stocks', 'alerts'] },
+  { title: 'Media', types: ['youtube', 'ytspotlight', 'radio', 'photos'] },
+  { title: 'Faith', types: ['verse', 'quote'] },
+  { title: 'Productivity', types: ['checklist', 'callbuttons', 'monthcal'] },
   { title: 'Personal', types: ['projects', 'files', 'links', 'notes', 'countdown'] },
   { title: 'AI', types: ['ai'] },
 ];
-const TYPES_WITH_SETTINGS = new Set(['weather', 'sports', 'youtube', 'links', 'ai', 'quicklinks', 'rss', 'ytspotlight', 'scores', 'countdown']);
+const TYPES_WITH_SETTINGS = new Set(['weather', 'sports', 'youtube', 'links', 'ai', 'quicklinks', 'rss', 'ytspotlight', 'scores', 'countdown', 'radio', 'alerts', 'photos', 'callbuttons', 'standings', 'stocks']);
 const SIZES = ['S', 'M', 'L'];
 const SIZE_NAMES = { S: 'Small', M: 'Medium', L: 'Large' };
 
@@ -1250,6 +1264,596 @@ function buildCountdownSettings(section, pane, body) {
   });
 }
 
+/* ---------- Widget batch 2: daily content data ----------
+ * KJV verses are public domain. Both lists rotate by day-of-year so every
+ * morning brings a fresh one, cycling monthly. */
+const DAILY_VERSES = [
+  ['John 3:16', 'For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life.'],
+  ['Philippians 4:13', 'I can do all things through Christ which strengtheneth me.'],
+  ['Romans 8:28', 'And we know that all things work together for good to them that love God, to them who are the called according to his purpose.'],
+  ['Psalm 23:1', 'The LORD is my shepherd; I shall not want.'],
+  ['Proverbs 3:5', 'Trust in the LORD with all thine heart; and lean not unto thine own understanding.'],
+  ['Jeremiah 29:11', 'For I know the thoughts that I think toward you, saith the LORD, thoughts of peace, and not of evil, to give you an expected end.'],
+  ['Isaiah 41:10', 'Fear thou not; for I am with thee: be not dismayed; for I am thy God: I will strengthen thee; yea, I will help thee.'],
+  ['Romans 10:9', 'That if thou shalt confess with thy mouth the Lord Jesus, and shalt believe in thine heart that God hath raised him from the dead, thou shalt be saved.'],
+  ['Psalm 46:1', 'God is our refuge and strength, a very present help in trouble.'],
+  ['Matthew 11:28', 'Come unto me, all ye that labour and are heavy laden, and I will give you rest.'],
+  ['John 14:6', 'Jesus saith unto him, I am the way, the truth, and the life: no man cometh unto the Father, but by me.'],
+  ['Romans 6:23', 'For the wages of sin is death; but the gift of God is eternal life through Jesus Christ our Lord.'],
+  ['1 John 1:9', 'If we confess our sins, he is faithful and just to forgive us our sins, and to cleanse us from all unrighteousness.'],
+  ['Philippians 4:6', 'Be careful for nothing; but in every thing by prayer and supplication with thanksgiving let your requests be made known unto God.'],
+  ['Joshua 1:9', 'Be strong and of a good courage; be not afraid, neither be thou dismayed: for the LORD thy God is with thee whithersoever thou goest.'],
+  ['Psalm 118:24', 'This is the day which the LORD hath made; we will rejoice and be glad in it.'],
+  ['2 Timothy 1:7', 'For God hath not given us the spirit of fear; but of power, and of love, and of a sound mind.'],
+  ['Hebrews 11:1', 'Now faith is the substance of things hoped for, the evidence of things not seen.'],
+  ['Romans 5:8', 'But God commendeth his love toward us, in that, while we were yet sinners, Christ died for us.'],
+  ['Ephesians 2:8', 'For by grace are ye saved through faith; and that not of yourselves: it is the gift of God.'],
+  ['Psalm 91:1', 'He that dwelleth in the secret place of the most High shall abide under the shadow of the Almighty.'],
+  ['Isaiah 40:31', 'But they that wait upon the LORD shall renew their strength; they shall mount up with wings as eagles.'],
+  ['Matthew 6:33', 'But seek ye first the kingdom of God, and his righteousness; and all these things shall be added unto you.'],
+  ['John 8:12', 'I am the light of the world: he that followeth me shall not walk in darkness, but shall have the light of life.'],
+  ['Psalm 119:105', 'Thy word is a lamp unto my feet, and a light unto my path.'],
+  ['Romans 12:2', 'And be not conformed to this world: but be ye transformed by the renewing of your mind.'],
+  ['Micah 6:8', 'He hath shewed thee, O man, what is good; and what doth the LORD require of thee, but to do justly, and to love mercy, and to walk humbly with thy God?'],
+  ['Psalm 37:4', 'Delight thyself also in the LORD; and he shall give thee the desires of thine heart.'],
+  ['James 1:5', 'If any of you lack wisdom, let him ask of God, that giveth to all men liberally, and upbraideth not; and it shall be given him.'],
+  ['Luke 24:32', 'And they said one to another, Did not our heart burn within us, while he talked with us by the way, and while he opened to us the scriptures?'],
+  ['Revelation 22:21', 'The grace of our Lord Jesus Christ be with you all. Amen.'],
+];
+const DAILY_QUOTES = [
+  ['The best way out is always through.', 'Robert Frost'],
+  ['What you do today can improve all your tomorrows.', 'Ralph Marston'],
+  ['It always seems impossible until it\u2019s done.', 'Nelson Mandela'],
+  ['Kindness is a language which the deaf can hear and the blind can see.', 'Mark Twain'],
+  ['The only way to do great work is to love what you do.', 'Steve Jobs'],
+  ['Believe you can and you\u2019re halfway there.', 'Theodore Roosevelt'],
+  ['A journey of a thousand miles begins with a single step.', 'Lao Tzu'],
+  ['Don\u2019t watch the clock; do what it does. Keep going.', 'Sam Levenson'],
+  ['The future belongs to those who believe in the beauty of their dreams.', 'Eleanor Roosevelt'],
+  ['Hardships often prepare ordinary people for an extraordinary destiny.', 'C.S. Lewis'],
+  ['Well done is better than well said.', 'Benjamin Franklin'],
+  ['What lies behind us and what lies before us are tiny matters compared to what lies within us.', 'Ralph Waldo Emerson'],
+  ['Action is the foundational key to all success.', 'Pablo Picasso'],
+  ['The secret of getting ahead is getting started.', 'Mark Twain'],
+  ['You are braver than you believe, stronger than you seem, and smarter than you think.', 'A.A. Milne'],
+  ['Keep your face always toward the sunshine \u2014 and shadows will fall behind you.', 'Walt Whitman'],
+  ['Do what you can, with what you have, where you are.', 'Theodore Roosevelt'],
+  ['Success is not final, failure is not fatal: it is the courage to continue that counts.', 'Winston Churchill'],
+  ['In the middle of difficulty lies opportunity.', 'Albert Einstein'],
+  ['Light tomorrow with today.', 'Elizabeth Barrett Browning'],
+  ['The best time to plant a tree was twenty years ago. The second best time is now.', 'Proverb'],
+  ['Nothing is impossible. The word itself says \u201cI\u2019m possible!\u201d', 'Audrey Hepburn'],
+  ['You miss 100% of the shots you don\u2019t take.', 'Wayne Gretzky'],
+  ['Whether you think you can or you think you can\u2019t, you\u2019re right.', 'Henry Ford'],
+  ['Perseverance is not a long race; it is many short races one after the other.', 'Walter Elliot'],
+  ['The only limit to our realization of tomorrow is our doubts of today.', 'Franklin D. Roosevelt'],
+  ['Do not wait to strike till the iron is hot; but make it hot by striking.', 'W.B. Yeats'],
+  ['Character cannot be developed in ease and quiet.', 'Helen Keller'],
+  ['Hope is the thing with feathers that perches in the soul.', 'Emily Dickinson'],
+  ['A winner is a dreamer who never gives up.', 'Nelson Mandela'],
+  ['Start where you are. Use what you have. Do what you can.', 'Arthur Ashe'],
+];
+function dayOfYearIndex(len) {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  const day = Math.floor((now - start) / 86400000);
+  return day % len;
+}
+
+/* ---------- Verse of the Day (pure frontend) ---------- */
+function renderVerseSection(section, body) {
+  const [ref, text] = DAILY_VERSES[dayOfYearIndex(DAILY_VERSES.length)];
+  body.innerHTML = `
+    <figure class="verse-card">
+      <blockquote>\u201C${escapeHtml(text)}\u201D</blockquote>
+      <figcaption>— ${escapeHtml(ref)} <span class="muted">KJV</span></figcaption>
+      <p class="muted verse-note">A new verse every morning.</p>
+    </figure>`;
+}
+
+/* ---------- Checklist (items live in the section's D1 settings) ---------- */
+function renderChecklistSection(section, body) {
+  const s = section.settings || {};
+  const items = (Array.isArray(s.items) ? s.items : [])
+    .filter((i) => i && typeof i.text === 'string')
+    .slice(0, 100)
+    .map((i, n) => ({ id: String(i.id || `it-${n}-${Date.now()}`), text: i.text.slice(0, 200), done: !!i.done }));
+  // Open items first; checked ones sink to the bottom.
+  const open = items.filter((i) => !i.done);
+  const done = items.filter((i) => i.done);
+  body.innerHTML = `
+    <div class="check-list">
+      ${[...open, ...done].map((i) => `
+        <div class="check-row${i.done ? ' is-done' : ''}">
+          <button type="button" class="check-box" data-toggle="${escapeHtml(i.id)}" aria-label="${i.done ? 'Uncheck' : 'Check off'} ${escapeHtml(i.text)}">${i.done ? '✓' : ''}</button>
+          <span class="check-text">${escapeHtml(i.text)}</span>
+          <button type="button" class="check-del" data-del="${escapeHtml(i.id)}" aria-label="Remove ${escapeHtml(i.text)}">✕</button>
+        </div>`).join('') || '<div class="empty">Nothing on the list yet — add your first item below.</div>'}
+    </div>
+    <form class="check-add">
+      <input name="text" placeholder="Add an item…" maxlength="200" aria-label="New checklist item" required>
+      <button type="submit">Add</button>
+    </form>`;
+  const persist = async (next) => {
+    await saveSection(section.id, { settings: { items: next } });
+    renderChecklistSection(getSection(section.id), body);
+  };
+  body.querySelectorAll('[data-toggle]').forEach((btn) => btn.addEventListener('click', async () => {
+    const id = btn.dataset.toggle;
+    await persist(items.map((i) => (i.id === id ? { ...i, done: !i.done } : i)));
+  }));
+  body.querySelectorAll('[data-del]').forEach((btn) => btn.addEventListener('click', async () => {
+    const id = btn.dataset.del;
+    await persist(items.filter((i) => i.id !== id));
+  }));
+  $('.check-add', body).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const text = e.target.text.value.trim();
+    if (!text) return;
+    await persist([...items, { id: `it-${Date.now()}`, text, done: false }]);
+  });
+}
+
+/* ---------- Radio stream player ---------- */
+function renderRadioSection(section, body) {
+  const s = section.settings || {};
+  const name = (s.name || '').trim();
+  const url = (s.streamUrl || '').trim();
+  if (!url) {
+    showEmpty(body, '📻', 'No station yet.', 'Tap Edit on this card to add a station name and stream URL.');
+    return;
+  }
+  body.innerHTML = `
+    <div class="radio-card">
+      <button type="button" class="radio-bigplay" data-play aria-label="Play ${escapeHtml(name || 'station')}">▶</button>
+      <div class="radio-meta">
+        <strong>${escapeHtml(name || 'Radio')}</strong><br>
+        <small class="muted" data-status>Tap play to listen</small>
+      </div>
+      <audio data-audio preload="none" src="${escapeHtml(url)}"></audio>
+    </div>`;
+  const audio = $('[data-audio]', body);
+  const btn = $('[data-play]', body);
+  const status = $('[data-status]', body);
+  btn.addEventListener('click', async () => {
+    try {
+      if (audio.paused) { await audio.play(); btn.textContent = '⏸'; status.textContent = 'Playing…'; }
+      else { audio.pause(); btn.textContent = '▶'; status.textContent = 'Paused'; }
+    } catch { status.textContent = 'That stream wouldn\u2019t play — check the URL.'; }
+  });
+  audio.addEventListener('error', () => { btn.textContent = '▶'; status.textContent = 'That stream wouldn\u2019t play — check the URL.'; });
+}
+
+function buildRadioSettings(section, pane, body) {
+  const s = section.settings || {};
+  pane.innerHTML = `
+    <form class="settings-form" id="radio-form">
+      <label>Station name
+        <input name="name" placeholder="e.g. K-LOVE, local station" value="${escapeHtml(s.name || '')}" required>
+      </label>
+      <label>Stream URL (https)
+        <input name="streamUrl" type="url" inputmode="url" placeholder="https://…/stream.mp3" value="${escapeHtml(s.streamUrl || '')}" required>
+      </label>
+      <button type="submit">Save</button>
+      <p class="muted">Use the station\u2019s direct stream address (often ends in .mp3 or /stream). Add the widget again for each station you want.</p>
+    </form>`;
+  $('#radio-form', pane).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const streamUrl = f.streamUrl.value.trim();
+    if (!/^https:\/\//i.test(streamUrl)) { alert('The stream URL should start with https://'); return; }
+    await saveSection(section.id, { settings: { name: f.name.value.trim(), streamUrl } });
+    renderRadioSection(getSection(section.id), body);
+  });
+}
+
+/* ---------- NOAA weather alerts (fetched server-side) ---------- */
+function defaultAlertCoords() {
+  // Prefer the Weather section's configured location; fall back to Lexington, KY.
+  const wx = sections.find((x) => x.type === 'weather');
+  const s = (wx && wx.settings) || {};
+  const lat = Number(s.lat), lon = Number(s.lon);
+  if (isFinite(lat) && isFinite(lon)) return { lat, lon, label: s.location || '' };
+  return { lat: 38.04, lon: -84.50, label: 'Lexington, KY' };
+}
+
+async function renderAlertsSection(section, body) {
+  const s = section.settings || {};
+  const lat = isFinite(Number(s.lat)) ? Number(s.lat) : null;
+  const lon = isFinite(Number(s.lon)) ? Number(s.lon) : null;
+  if (lat == null || lon == null) {
+    showEmpty(body, '🌤️', 'No location set.', 'Tap Edit on this card to set the location for alerts.');
+    return;
+  }
+  showLoading(body, 2);
+  const load = async () => {
+    try {
+      const res = await fetch(`/api/alerts?lat=${lat}&lon=${lon}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Alerts unavailable.');
+      paintAlerts(body, data.alerts || []);
+    } catch (err) {
+      showError(body, err.message || 'Alerts are unavailable right now.', load);
+    }
+  };
+  await load();
+  // Alerts change slowly; refresh every 15 minutes while visible.
+  const timer = setInterval(() => { if (body.isConnected) load(); else clearInterval(timer); }, 900000);
+  liveTimers.push(timer);
+}
+
+function paintAlerts(body, alerts) {
+  if (!alerts.length) {
+    body.innerHTML = '<div class="alerts-calm"><span class="alerts-sun">🌤️</span><p><strong>All clear.</strong><br><small class="muted">No active weather alerts for your area.</small></p></div>';
+    return;
+  }
+  body.innerHTML = `<div class="alert-list">${alerts.map((a) => {
+    const exp = a.expires ? new Date(a.expires) : null;
+    const expStr = exp && !isNaN(exp) ? exp.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' }) : '';
+    return `<div class="alert-item">
+      <span class="alert-badge">${escapeHtml(a.severity || 'Alert')}</span>
+      <div><strong>${escapeHtml(a.headline)}</strong>
+      ${a.areas ? `<br><small class="muted">${escapeHtml(a.areas)}</small>` : ''}
+      ${expStr ? `<br><small class="muted">Until ${escapeHtml(expStr)}</small>` : ''}</div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+function buildAlertsSettings(section, pane, body) {
+  const s = section.settings || {};
+  const d = defaultAlertCoords();
+  const lat = s.lat !== undefined && s.lat !== '' ? s.lat : d.lat;
+  const lon = s.lon !== undefined && s.lon !== '' ? s.lon : d.lon;
+  pane.innerHTML = `
+    <form class="settings-form" id="alerts-form">
+      <label>Latitude
+        <input name="lat" inputmode="decimal" placeholder="38.04" value="${escapeHtml(String(lat))}" required>
+      </label>
+      <label>Longitude
+        <input name="lon" inputmode="decimal" placeholder="-84.50" value="${escapeHtml(String(lon))}" required>
+      </label>
+      <button type="submit">Save</button>
+      <p class="muted">Prefilled from your Weather section${d.label ? ` (${escapeHtml(d.label)})` : ''}. Alerts come from the National Weather Service and refresh every 15 minutes.</p>
+    </form>`;
+  $('#alerts-form', pane).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const nlat = Number(f.lat.value), nlon = Number(f.lon.value);
+    if (!isFinite(nlat) || !isFinite(nlon) || Math.abs(nlat) > 90 || Math.abs(nlon) > 180) {
+      alert('Those coordinates don\u2019t look right — check the numbers.');
+      return;
+    }
+    await saveSection(section.id, { settings: { lat: nlat, lon: nlon } });
+    renderAlertsSection(getSection(section.id), body);
+  });
+}
+
+/* ---------- Photos: crossfading slideshow ---------- */
+function renderPhotosSection(section, body) {
+  const s = section.settings || {};
+  const urls = String(s.urls || '').split('\n').map((u) => u.trim()).filter((u) => /^https?:\/\//i.test(u)).slice(0, 20);
+  const seconds = Math.min(300, Math.max(5, Number(s.seconds) || 30));
+  if (!urls.length) {
+    showEmpty(body, '🖼️', 'No photos yet.', 'Tap Edit on this card to add image URLs, one per line.');
+    return;
+  }
+  let idx = 0;
+  let playing = true;
+  body.innerHTML = `
+    <div class="photo-frame" data-frame role="button" tabindex="0" aria-label="Photo slideshow — tap for next photo">
+      ${urls.map((u, i) => `<img data-slide="${i}" src="${escapeHtml(u)}" alt="" loading="${i ? 'lazy' : 'eager'}" class="${i ? '' : 'is-active'}">`).join('')}
+      <button type="button" class="photo-toggle" data-toggle aria-label="Pause slideshow">⏸</button>
+      <span class="photo-count" data-count>1 / ${urls.length}</span>
+    </div>`;
+  const frame = $('[data-frame]', body);
+  const slides = [...body.querySelectorAll('[data-slide]')];
+  const toggle = $('[data-toggle]', body);
+  const count = $('[data-count]', body);
+  const show = (n) => {
+    idx = (n + urls.length) % urls.length;
+    slides.forEach((img, i) => img.classList.toggle('is-active', i === idx));
+    count.textContent = `${idx + 1} / ${urls.length}`;
+  };
+  const advance = () => show(idx + 1);
+  frame.addEventListener('click', (e) => {
+    if (e.target === toggle) return; // handled below
+    advance();
+  });
+  frame.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); advance(); } });
+  toggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    playing = !playing;
+    toggle.textContent = playing ? '⏸' : '▶';
+    toggle.setAttribute('aria-label', playing ? 'Pause slideshow' : 'Resume slideshow');
+  });
+  const timer = setInterval(() => {
+    if (!frame.isConnected) { clearInterval(timer); return; }
+    if (playing && urls.length > 1) advance();
+  }, seconds * 1000);
+  liveTimers.push(timer);
+}
+
+function buildPhotosSettings(section, pane, body) {
+  const s = section.settings || {};
+  pane.innerHTML = `
+    <form class="settings-form" id="photos-form">
+      <label>Image URLs (one per line)
+        <textarea name="urls" rows="5" placeholder="https://…/photo1.jpg&#10;https://…/photo2.jpg">${escapeHtml(s.urls || '')}</textarea>
+      </label>
+      <label>Change photo every
+        <select name="seconds">
+          ${[10, 15, 30, 60, 120].map((n) => `<option value="${n}" ${(Number(s.seconds) || 30) === n ? 'selected' : ''}>${n} seconds</option>`).join('')}
+        </select>
+      </label>
+      <button type="submit">Save</button>
+      <p class="muted">Link to pictures already online (from your Files share links, for example). Tap the photo to jump ahead; the corner button pauses.</p>
+    </form>`;
+  $('#photos-form', pane).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    await saveSection(section.id, { settings: { urls: f.urls.value, seconds: Number(f.seconds.value) || 30 } });
+    renderPhotosSection(getSection(section.id), body);
+  });
+}
+
+/* ---------- Tap-to-Call buttons ---------- */
+function renderCallButtonsSection(section, body) {
+  const s = section.settings || {};
+  const rows = (Array.isArray(s.contacts) ? s.contacts : [])
+    .filter((c) => c && (c.name || c.phone))
+    .slice(0, 20)
+    .map((c) => ({ name: String(c.name || '').slice(0, 60), phone: String(c.phone || '').slice(0, 30) }));
+  if (!rows.length) {
+    showEmpty(body, '📞', 'Nobody on speed-dial yet.', 'Tap Edit on this card to add the people you call most.');
+    return;
+  }
+  body.innerHTML = `<div class="call-grid">${rows.map((c) => {
+    const tel = c.phone.replace(/[^+\d]/g, '');
+    return `<a class="call-btn" href="tel:${escapeHtml(tel)}">
+      <span class="call-icon">📞</span>
+      <span class="call-name">${escapeHtml(c.name || c.phone)}</span>
+      ${c.name ? `<small class="muted">${escapeHtml(c.phone)}</small>` : ''}
+    </a>`;
+  }).join('')}</div>`;
+}
+
+function buildCallButtonsSettings(section, pane, body) {
+  const s = section.settings || {};
+  const rows = (Array.isArray(s.contacts) ? s.contacts : []).slice(0, 20);
+  const draw = () => {
+    pane.innerHTML = `
+      <div class="settings-list">${rows.map((c, i) => `
+        <div class="settings-row">
+          <div><strong>${escapeHtml(c.name || c.phone || '—')}</strong><br><small>${escapeHtml(c.phone || '')}</small></div>
+          <button type="button" data-rm="${i}" class="danger">Remove</button>
+        </div>`).join('') || '<div class="empty">No contacts yet.</div>'}</div>
+      <form class="settings-form" id="call-add-form" style="margin-top:14px">
+        <div class="label">Add contact</div>
+        <label>Name
+          <input name="name" placeholder="e.g. Mom" maxlength="60">
+        </label>
+        <label>Phone number
+          <input name="phone" type="tel" inputmode="tel" placeholder="(606) 555-0123" required>
+        </label>
+        <button type="submit">Add contact</button>
+      </form>`;
+    pane.querySelectorAll('[data-rm]').forEach((btn) => btn.addEventListener('click', async () => {
+      rows.splice(Number(btn.dataset.rm), 1);
+      await saveSection(section.id, { settings: { contacts: rows } });
+      draw();
+      renderCallButtonsSection(getSection(section.id), body);
+    }));
+    $('#call-add-form', pane).addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      const phone = f.phone.value.trim();
+      if (!phone) return;
+      rows.push({ name: f.name.value.trim(), phone });
+      await saveSection(section.id, { settings: { contacts: rows } });
+      draw();
+      renderCallButtonsSection(getSection(section.id), body);
+    });
+  };
+  draw();
+}
+
+/* ---------- Sports standings (fetched server-side) ---------- */
+async function renderStandingsSection(section, body) {
+  const league = ((section.settings || {}).league || 'nfl').toLowerCase();
+  showLoading(body, 4);
+  try {
+    const res = await fetch(`/api/standings?league=${encodeURIComponent(league)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Standings unavailable.');
+    paintStandings(body, data.rows || [], SCORE_LEAGUES[league] || league.toUpperCase());
+  } catch (err) {
+    showError(body, err.message || 'Standings are unavailable right now.', () => renderStandingsSection(section, body));
+  }
+}
+
+function paintStandings(body, rows, leagueLabel) {
+  if (!rows.length) {
+    showEmpty(body, '🏟️', 'No standings right now.', 'Offseason? Standings appear automatically when the season starts.');
+    return;
+  }
+  // Group rows by division/conference, preserving ESPN's order.
+  const groups = [];
+  for (const r of rows) {
+    let g = groups.find((x) => x.name === r.group);
+    if (!g) { g = { name: r.group, rows: [] }; groups.push(g); }
+    g.rows.push(r);
+  }
+  body.innerHTML = `<div class="standings">${groups.map((g) => `
+    ${g.name ? `<div class="standings-group">${escapeHtml(g.name)}</div>` : ''}
+    <table class="standings-table">
+      <thead><tr><th>Team</th><th>W</th><th>L</th>${g.rows.some((r) => r.t) ? '<th>T</th>' : ''}</tr></thead>
+      <tbody>${g.rows.map((r) => `
+        <tr><td><strong>${escapeHtml(r.abbr || r.team)}</strong> <span class="muted">${escapeHtml(r.abbr ? r.team : '')}</span></td>
+        <td>${escapeHtml(r.w)}</td><td>${escapeHtml(r.l)}</td>${g.rows.some((x) => x.t) ? `<td>${escapeHtml(r.t)}</td>` : ''}</tr>`).join('')}
+      </tbody>
+    </table>`).join('')}
+    <p class="muted" style="margin:8px 0 0">${escapeHtml(leagueLabel)} • updated every 30 minutes</p>
+  </div>`;
+}
+
+function buildStandingsSettings(section, pane, body) {
+  const league = ((section.settings || {}).league || 'nfl').toLowerCase();
+  pane.innerHTML = `
+    <form class="settings-form" id="standings-form">
+      <label>League
+        <select name="league">
+          ${Object.entries(SCORE_LEAGUES).map(([v, l]) => `<option value="${v}" ${league === v ? 'selected' : ''}>${l}</option>`).join('')}
+        </select>
+      </label>
+      <button type="submit">Save</button>
+      <p class="muted">Add the widget again for a second league — each card keeps its own league.</p>
+    </form>`;
+  $('#standings-form', pane).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await saveSection(section.id, { settings: { league: e.target.league.value } });
+    renderStandingsSection(getSection(section.id), body);
+  });
+}
+
+/* ---------- Stocks (fetched server-side) ---------- */
+async function renderStocksSection(section, body) {
+  const s = section.settings || {};
+  const symbols = String(s.symbols || '').trim();
+  if (!symbols) {
+    showEmpty(body, '📈', 'No tickers yet.', 'Tap Edit on this card to add symbols like AAPL, MSFT.');
+    return;
+  }
+  showLoading(body, 3);
+  const load = async () => {
+    try {
+      const res = await fetch(`/api/quote?symbols=${encodeURIComponent(symbols)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Quotes unavailable.');
+      paintStocks(body, data);
+    } catch (err) {
+      showError(body, err.message || 'Quotes are unavailable right now.', load);
+    }
+  };
+  await load();
+  // Refresh every 5 minutes while visible.
+  const timer = setInterval(() => { if (body.isConnected) load(); else clearInterval(timer); }, 300000);
+  liveTimers.push(timer);
+}
+
+function paintStocks(body, data) {
+  const quotes = data.quotes || [];
+  const errors = data.errors || [];
+  body.innerHTML = `
+    <div class="stock-list">
+      ${quotes.map((q) => {
+        const up = q.changePct >= 0;
+        return `<div class="stock-row">
+          <strong>${escapeHtml(q.symbol)}</strong>
+          <span class="stock-price">$${escapeHtml(String(q.price))}</span>
+          <span class="stock-chg ${up ? 'is-up' : 'is-down'}">${up ? '▲' : '▼'} ${escapeHtml(String(Math.abs(q.changePct)))}%</span>
+        </div>`;
+      }).join('') || '<div class="empty">No quotes came back — check your symbols.</div>'}
+    </div>
+    ${errors.length ? `<p class="muted">Couldn\u2019t look up: ${escapeHtml(errors.join(', '))}</p>` : ''}`;
+}
+
+function buildStocksSettings(section, pane, body) {
+  const s = section.settings || {};
+  pane.innerHTML = `
+    <form class="settings-form" id="stocks-form">
+      <label>Symbols (comma-separated)
+        <input name="symbols" placeholder="AAPL, MSFT, BRK.B" value="${escapeHtml(s.symbols || '')}" required>
+      </label>
+      <button type="submit">Save</button>
+      <p class="muted">Up to 10 US tickers. Prices refresh every 5 minutes while the page is open.</p>
+    </form>`;
+  $('#stocks-form', pane).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const symbols = e.target.symbols.value.trim();
+    if (!/^[A-Za-z0-9.,\s]{1,80}$/.test(symbols)) { alert('Use letters, numbers, dots, and commas only.'); return; }
+    await saveSection(section.id, { settings: { symbols } });
+    renderStocksSection(getSection(section.id), body);
+  });
+}
+
+/* ---------- Month calendar (reads the My Day section's cached events) ---------- */
+function myDayEvents() {
+  const sec = sections.find((x) => x.type === 'myday');
+  const de = sec && sec.settings && sec.settings.dayEvents;
+  if (!de || typeof de !== 'object' || typeof de.date !== 'string') return { date: '', events: [] };
+  const events = (Array.isArray(de.events) ? de.events : [])
+    .filter((e) => e && e.title)
+    .map((e) => ({ title: String(e.title).slice(0, 120), time: String(e.time || '').slice(0, 40) }));
+  return { date: de.date, events };
+}
+
+function renderMonthCalSection(section, body) {
+  const today = new Date();
+  let viewY = today.getFullYear(), viewM = today.getMonth();
+  let selected = null; // 'YYYY-MM-DD'
+  const pad = (n) => String(n).padStart(2, '0');
+  const key = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
+
+  const draw = () => {
+    const { date: evDate, events } = myDayEvents();
+    const first = new Date(viewY, viewM, 1);
+    const startDay = first.getDay();
+    const daysIn = new Date(viewY, viewM + 1, 0).getDate();
+    const monthName = first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    const todayKey = key(today.getFullYear(), today.getMonth(), today.getDate());
+    let cells = '';
+    for (let i = 0; i < startDay; i++) cells += '<span class="mcal-blank"></span>';
+    for (let d = 1; d <= daysIn; d++) {
+      const k = key(viewY, viewM, d);
+      const cls = ['mcal-day'];
+      if (k === todayKey) cls.push('is-today');
+      if (k === evDate && events.length) cls.push('has-events');
+      if (k === selected) cls.push('is-selected');
+      cells += `<button type="button" class="${cls.join(' ')}" data-day="${k}">${d}${k === evDate && events.length ? '<span class="mcal-dot"></span>' : ''}</button>`;
+    }
+    const selEvents = selected === evDate ? events : [];
+    const sp = selected.split('-').map(Number);
+    const selLabel = new Date(sp[0], sp[1] - 1, sp[2])
+      .toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+    body.innerHTML = `
+      <div class="mcal">
+        <div class="mcal-head">
+          <button type="button" data-nav="-1" aria-label="Previous month">‹</button>
+          <strong>${escapeHtml(monthName)}</strong>
+          <button type="button" data-nav="1" aria-label="Next month">›</button>
+        </div>
+        <div class="mcal-dow">${['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d) => `<span>${d}</span>`).join('')}</div>
+        <div class="mcal-grid">${cells}</div>
+        ${selected ? `<div class="mcal-events">
+          <strong>${escapeHtml(selLabel)}</strong>
+          ${selEvents.length ? `<ul>${selEvents.map((e) => `<li>${escapeHtml(e.time ? e.time + ' — ' : '')}${escapeHtml(e.title)}</li>`).join('')}</ul>`
+            : '<p class="muted">No events saved for this day.</p>'}
+        </div>` : ''}
+      </div>`;
+    body.querySelectorAll('[data-nav]').forEach((b) => b.addEventListener('click', () => {
+      const n = new Date(viewY, viewM + Number(b.dataset.nav), 1);
+      viewY = n.getFullYear(); viewM = n.getMonth();
+      draw();
+    }));
+    body.querySelectorAll('[data-day]').forEach((b) => b.addEventListener('click', () => {
+      selected = selected === b.dataset.day ? null : b.dataset.day;
+      draw();
+    }));
+  };
+  draw();
+}
+
+/* ---------- Quote of the Day (pure frontend) ---------- */
+function renderQuoteSection(section, body) {
+  const [text, author] = DAILY_QUOTES[dayOfYearIndex(DAILY_QUOTES.length)];
+  body.innerHTML = `
+    <figure class="quote-card">
+      <blockquote>\u201C${escapeHtml(text)}\u201D</blockquote>
+      <figcaption>— ${escapeHtml(author)}</figcaption>
+      <p class="muted verse-note">A new quote every morning.</p>
+    </figure>`;
+}
+
 /* ---------- Files (D1 blob storage) ---------- */
 async function renderFilesSection(section, body) {
   body.innerHTML = `
@@ -1759,28 +2363,83 @@ function buildSettingsPane(section, pane, body) {
     ytspotlight: buildSpotlightSettings,
     scores: buildScoresSettings,
     countdown: buildCountdownSettings,
+    radio: buildRadioSettings,
+    alerts: buildAlertsSettings,
+    photos: buildPhotosSettings,
+    callbuttons: buildCallButtonsSettings,
+    standings: buildStandingsSettings,
+    stocks: buildStocksSettings,
   };
   if (builders[section.type]) builders[section.type](section, pane, body);
   else pane.innerHTML = '<div class="empty">No settings for this section.</div>';
 }
 
-/* ---------- Add Section (grouped catalog, only real widgets) ---------- */
-function openAddModal() {
-  const modal = $('#add-modal');
+/* ---------- Add Section (searchable catalog with filter chips) ---------- */
+let catalogQuery = '';
+let catalogFilter = 'all'; // 'all' | 'hot' | a TYPE_GROUPS title
+
+function catalogMatches(type, meta, q) {
+  if (!q) return true;
+  const hay = `${meta.label} ${meta.desc} ${meta.keywords || ''}`.toLowerCase();
+  return q.toLowerCase().split(/\s+/).every((w) => hay.includes(w));
+}
+
+function catalogChips() {
+  const groups = TYPE_GROUPS.map((g) => g.title);
+  const chips = [
+    { id: 'all', label: 'All' },
+    { id: 'hot', label: '🔥 Hot' },
+    ...groups.map((t) => ({ id: t, label: t })),
+  ];
+  return `<div class="catalog-chips" role="group" aria-label="Filter widgets">${chips.map((c) => `
+    <button type="button" class="catalog-chip${catalogFilter === c.id ? ' is-active' : ''}"
+      data-chip="${escapeHtml(c.id)}">${escapeHtml(c.label)}</button>`).join('')}</div>`;
+}
+
+function renderCatalog() {
   const picker = $('#type-picker');
-  picker.innerHTML = TYPE_GROUPS.map(group => `
+  const refocus = !!(document.activeElement && document.activeElement.id === 'catalog-search');
+  const q = catalogQuery.trim();
+  let html = `
+    <input id="catalog-search" class="catalog-search" type="search" placeholder="Search widgets…" value="${escapeHtml(catalogQuery)}" aria-label="Search widgets">
+    ${catalogChips()}`;
+  const groups = catalogFilter === 'hot'
+    ? [{ title: '🔥 Hot right now', types: Object.keys(SECTION_TYPES).filter((t) => SECTION_TYPES[t].hot) }]
+    : TYPE_GROUPS.filter((g) => catalogFilter === 'all' || g.title === catalogFilter);
+  const anyVisible = groups.some((g) => g.types.some((t) => catalogMatches(t, SECTION_TYPES[t], q)));
+  html += groups.map((group) => {
+    const types = group.types.filter((t) => catalogMatches(t, SECTION_TYPES[t], q));
+    if (!types.length) return '';
+    return `
     <div class="type-group">
       <p class="type-group-title">${escapeHtml(group.title)}</p>
       <div class="type-picker">
-        ${group.types.map(type => {
+        ${types.map((type) => {
           const meta = SECTION_TYPES[type];
           return `<button type="button" class="type-card" data-type="${escapeHtml(type)}">
             <strong>${escapeHtml(meta.label)}</strong><span>${escapeHtml(meta.desc)}</span>
           </button>`;
         }).join('')}
       </div>
-    </div>`).join('');
-  picker.querySelectorAll('[data-type]').forEach(btn => btn.addEventListener('click', async () => {
+    </div>`;
+  }).join('');
+  if (!anyVisible) html += '<div class="empty">No widgets match that search.</div>';
+  picker.innerHTML = html;
+
+  const search = $('#catalog-search', picker);
+  search.addEventListener('input', () => { catalogQuery = search.value; renderCatalog(); });
+  // Keep focus where the user is typing across re-renders — but don't steal
+  // it (and pop the mobile keyboard) when the modal first opens.
+  if (refocus) {
+    search.focus();
+    search.setSelectionRange(search.value.length, search.value.length);
+  }
+
+  picker.querySelectorAll('[data-chip]').forEach((btn) => btn.addEventListener('click', () => {
+    catalogFilter = btn.dataset.chip;
+    renderCatalog();
+  }));
+  picker.querySelectorAll('[data-type]').forEach((btn) => btn.addEventListener('click', async () => {
     btn.disabled = true;
     const type = btn.dataset.type;
     try {
@@ -1802,7 +2461,13 @@ function openAddModal() {
       btn.disabled = false;
     }
   }));
-  modal.hidden = false;
+}
+
+function openAddModal() {
+  catalogQuery = '';
+  catalogFilter = 'all';
+  renderCatalog();
+  $('#add-modal').hidden = false;
 }
 function closeAddModal() { $('#add-modal').hidden = true; }
 
@@ -1979,6 +2644,16 @@ const RENDERERS = {
   ytspotlight: renderSpotlightSection,
   scores: renderScoresSection,
   countdown: renderCountdownSection,
+  verse: renderVerseSection,
+  checklist: renderChecklistSection,
+  radio: renderRadioSection,
+  alerts: renderAlertsSection,
+  photos: renderPhotosSection,
+  callbuttons: renderCallButtonsSection,
+  standings: renderStandingsSection,
+  stocks: renderStocksSection,
+  monthcal: renderMonthCalSection,
+  quote: renderQuoteSection,
 };
 
 /* ---------- Masonry layout: small cards stack beside tall ones ----------
