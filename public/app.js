@@ -120,7 +120,7 @@ async function saveSection(id, patch) {
 const PREFS_KEY = 'hd-prefs-v1';
 let prefs = loadPrefs();
 function loadPrefs() {
-  const fallback = { tvMode: false, fontSize: 'normal', background: 'aurora' };
+  const fallback = { tvMode: false, fontSize: 'normal', background: 'aurora', glass: 96 };
   try {
     return Object.assign(fallback, JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'));
   } catch { return fallback; }
@@ -134,6 +134,8 @@ function applyPrefs() {
   document.body.classList.remove('bg-solid', 'bg-graphite');
   if (prefs.background === 'solid') document.body.classList.add('bg-solid');
   else if (prefs.background === 'graphite') document.body.classList.add('bg-graphite');
+  const glass = Math.min(100, Math.max(35, Number(prefs.glass) || 96));
+  document.documentElement.style.setProperty('--glass', (glass / 100).toFixed(2));
 }
 
 /* ---------- Loading / empty / error states ---------- */
@@ -1617,6 +1619,7 @@ async function moveSectionSilent(id, dir) {
 }
 
 function renderSettingsAppearance(el) {
+  const glassVal = Math.min(100, Math.max(35, Number(prefs.glass) || 96));
   el.innerHTML = `
     <h3>Appearance</h3>
     <p class="muted" style="margin:0">These are saved on this device.</p>
@@ -1642,6 +1645,13 @@ function renderSettingsAppearance(el) {
         <option value="solid" ${prefs.background === 'solid' ? 'selected' : ''}>Solid black</option>
         <option value="graphite" ${prefs.background === 'graphite' ? 'selected' : ''}>Graphite</option>
       </select>
+    </div>
+    <div class="pref-row">
+      <div><strong>Glass</strong><br><small>How see-through your cards are — slide it till it looks right</small></div>
+      <div style="display:flex;align-items:center;gap:12px;flex:1 1 220px;min-width:200px">
+        <input type="range" id="pref-glass" min="35" max="100" step="1" value="${glassVal}" aria-label="Card transparency">
+        <span class="glass-val" id="pref-glass-val">${glassVal}%</span>
+      </div>
     </div>`;
   $('#pref-tv', el).addEventListener('change', (e) => {
     prefs.tvMode = e.target.checked; storePrefs(); applyPrefs();
@@ -1651,6 +1661,12 @@ function renderSettingsAppearance(el) {
   });
   $('#pref-bg', el).addEventListener('change', (e) => {
     prefs.background = e.target.value; storePrefs(); applyPrefs();
+  });
+  const glassInput = $('#pref-glass', el), glassLabel = $('#pref-glass-val', el);
+  glassInput.addEventListener('input', () => {
+    prefs.glass = Number(glassInput.value);
+    glassLabel.textContent = `${glassInput.value}%`;
+    storePrefs(); applyPrefs();
   });
 }
 
